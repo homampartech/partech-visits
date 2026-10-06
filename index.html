@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>زيارات بارتك</title>
+<meta name="description" content="تخطيط وتسجيل زيارات مبيعات بارتك اليومية ومتابعتها مقابل أهداف الخطة">
+<meta name="theme-color" content="#0A6A86">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Readex+Pro:wght@500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<style>
+/* Layout: one-column field app, sticky header, fixed bottom tabs, bottom sheets for every form */
+:root{
+  --bg:#EDF1F3; --surface:#FFFFFF; --surface-2:#F5F7F8; --line:#D6DEE3;
+  --ink:#13222C; --ink-2:#4A5C68; --ink-3:#7A8A95;
+  --accent:#0A6A86; --accent-ink:#FFFFFF; --accent-soft:#DAECF2;
+  --good:#1D8049; --good-soft:#DEF2E5; --warn:#A86A12; --warn-soft:#FAEDD6;
+  --bad:#B93B28; --bad-soft:#F8E0DA; --new:#5847BF; --new-soft:#E6E2F7;
+  --shadow:0 1px 2px rgba(19,34,44,.06),0 6px 18px rgba(19,34,44,.07);
+  --scrim:rgba(10,20,27,.45);
+  --f-display:"Readex Pro","IBM Plex Sans Arabic","Segoe UI",Tahoma,sans-serif;
+  --f-body:"IBM Plex Sans Arabic","Segoe UI",Tahoma,sans-serif;
+  --r:14px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0E161B; --surface:#16212A; --surface-2:#1C2932; --line:#2A3A45;
+  --ink:#E5ECF0; --ink-2:#A8B7C0; --ink-3:#7B8B95;
+  --accent:#43B4D4; --accent-ink:#06212A; --accent-soft:#13394A;
+  --good:#52C585; --good-soft:#14301F; --warn:#E3AA4A; --warn-soft:#33270F;
+  --bad:#EE7B65; --bad-soft:#3B1C16; --new:#A396F2; --new-soft:#25203F;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25);
+  --scrim:rgba(0,0,0,.6); color-scheme:dark;
+}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+img{max-width:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#app{min-height:100%;display:flex;flex-direction:column}
+.num{font-variant-numeric:tabular-nums}
+
+/* header */
+.top{position:sticky;top:0;z-index:20;background:var(--bg);padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--f-display);font-weight:700;font-size:18px;line-height:1.2}
+.brand small{display:flex;align-items:center;gap:6px;font-family:var(--f-body);font-weight:500;font-size:12px;color:var(--ink-3)}
+.live{width:8px;height:8px;border-radius:50%;background:var(--ink-3);display:inline-block}
+.live.on{background:var(--good)}
+.who{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);min-width:0}
+.who .av{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-family:var(--f-display);font-weight:600}
+.who .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw}
+.badge{font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+
+/* main */
+.wrap{flex:1;width:100%;max-width:720px;margin-inline:auto;padding-inline:16px;padding-block:14px calc(92px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+.notice{background:var(--warn-soft);color:var(--ink);border-radius:var(--r);padding:12px 14px;font-size:14px}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:22px 16px;text-align:center;color:var(--ink-2)}
+.empty b{display:block;color:var(--ink);font-family:var(--f-display);font-weight:600;margin-bottom:4px}
+h2.sec{font-family:var(--f-display);font-weight:600;font-size:16px;margin:6px 0 0;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+h2.sec small{font-family:var(--f-body);font-size:12px;color:var(--ink-3);font-weight:500}
+
+/* login */
+.login{max-width:420px;width:100%;margin:6vh auto 0;display:flex;flex-direction:column;gap:16px}
+.login .logo{width:72px;height:72px;border-radius:20px}
+.login h1{font-family:var(--f-display);font-weight:700;font-size:26px;margin:0;line-height:1.25}
+.login p{margin:0;color:var(--ink-2)}
+.install{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--accent-soft);border-radius:var(--r);padding:10px 12px;font-size:14px}
+
+/* tabs */
+.tabs{position:fixed;bottom:0;inset-inline:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabs button{appearance:none;border:0;background:none;color:var(--ink-3);display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;font-size:12px;font-weight:600;border-radius:10px;cursor:pointer}
+.tabs button[aria-current="page"]{color:var(--accent);background:var(--accent-soft)}
+.tabs svg{width:22px;height:22px}
+
+/* buttons */
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:10px 14px;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;min-height:44px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--bad);border-color:var(--bad-soft)}
+.btn.sm{min-height:36px;padding:6px 10px;font-size:13px;border-radius:10px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row.grow>*{flex:1 1 0}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;white-space:nowrap;line-height:1.7}
+.chip.current{background:var(--good-soft);color:var(--good)}
+.chip.lapsed{background:var(--warn-soft);color:var(--warn)}
+.chip.new{background:var(--new-soft);color:var(--new)}
+.chip.muted{background:var(--surface-2);color:var(--ink-2)}
+.chip.order{background:var(--good-soft);color:var(--good)}
+.chip.interested{background:var(--accent-soft);color:var(--accent)}
+.chip.notnow{background:var(--bad-soft);color:var(--bad)}
+.chip.absent,.chip.missed{background:var(--surface-2);color:var(--ink-2)}
+
+/* day head */
+.dayhead{background:var(--surface);border-radius:18px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px}
+.daynav{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.daynav .d{text-align:center;flex:1}
+.daynav .d b{display:block;font-family:var(--f-display);font-weight:600;font-size:17px}
+.daynav .d span{font-size:12px;color:var(--ink-3)}
+.iconbtn{appearance:none;border:1px solid var(--line);background:var(--surface-2);width:40px;height:40px;border-radius:12px;display:grid;place-items:center;cursor:pointer;color:var(--ink-2);flex:none}
+.iconbtn svg{width:20px;height:20px}
+.score{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+.score .big{font-family:var(--f-display);font-weight:700;font-size:40px;line-height:1}
+.score .big small{font-size:18px;color:var(--ink-3);font-weight:500}
+.score .lbl{font-size:13px;color:var(--ink-2)}
+.slots{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}
+.slots.many{grid-template-columns:repeat(auto-fill,minmax(18px,1fr))}
+.slot{height:12px;border-radius:4px;border:1.5px dashed var(--line)}
+.slot.planned{border:1.5px solid var(--accent);background:transparent}
+.slot.done{border:0;background:var(--accent)}
+.slot.order{border:0;background:var(--good)}
+.slot.missed{border:0;background:var(--bad-soft)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink-3)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:5px;vertical-align:-1px}
+.minis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mini{background:var(--surface-2);border-radius:12px;padding:8px 10px}
+.mini b{display:block;font-family:var(--f-display);font-size:18px;font-weight:600}
+.mini span{font-size:12px;color:var(--ink-2)}
+
+/* visit cards */
+.list{display:flex;flex-direction:column;gap:10px}
+.visit{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 14px;display:flex;flex-direction:column;gap:8px;border-inline-start:4px solid var(--line)}
+.visit.st-planned{border-inline-start-color:var(--accent)}
+.visit.st-done{border-inline-start-color:var(--good)}
+.visit.st-missed{border-inline-start-color:var(--bad-soft);opacity:.85}
+.v-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.v-name{font-weight:700;font-size:16px;line-height:1.35;min-width:0}
+.v-name button{all:unset;cursor:pointer}
+.v-sub{font-size:13px;color:var(--ink-2)}
+.v-time{font-variant-numeric:tabular-nums;font-size:13px;font-weight:600;color:var(--ink-2);white-space:nowrap}
+.v-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;color:var(--ink-2)}
+.v-note{font-size:14px;background:var(--surface-2);border-radius:10px;padding:8px 10px;white-space:pre-wrap;overflow-wrap:anywhere}
+.v-note .k{display:block;font-size:11px;font-weight:700;color:var(--ink-3);letter-spacing:.02em;margin-bottom:2px}
+.coachnote{font-size:14px;background:var(--accent-soft);border-radius:10px;padding:8px 10px;white-space:pre-wrap;overflow-wrap:anywhere}
+.coachnote .k{display:block;font-size:11px;font-weight:700;color:var(--accent);margin-bottom:2px}
+.v-actions{display:flex;gap:6px;flex-wrap:wrap}
+.v-actions .btn{flex:1 1 auto}
+
+/* customers */
+.searchbar{display:flex;gap:8px}
+.input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px;min-height:44px;font-size:16px}
+textarea.input{min-height:90px;resize:vertical;line-height:1.5}
+.filters{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.filters button{appearance:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;color:var(--ink-2)}
+.filters button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.cust{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;text-align:start;border:0;width:100%}
+.cust .avatar{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-family:var(--f-display);font-weight:600;flex:none}
+.avatar.current{background:var(--good-soft);color:var(--good)}
+.avatar.lapsed{background:var(--warn-soft);color:var(--warn)}
+.avatar.new{background:var(--new-soft);color:var(--new)}
+.cust .c-main{flex:1;min-width:0}
+.cust .c-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.cust .c-sub{font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.cust .c-side{text-align:end;font-size:12px;color:var(--ink-3);display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+.due{color:var(--bad);font-weight:600}
+
+/* dashboard */
+.card{background:var(--surface);border-radius:18px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card h3{margin:0;font-family:var(--f-display);font-weight:600;font-size:15px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card h3 small{font-family:var(--f-body);font-weight:500;font-size:12px;color:var(--ink-3)}
+.kpi{display:flex;flex-direction:column;gap:5px}
+.kpi .kl{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.kpi .kl b{font-variant-numeric:tabular-nums;font-family:var(--f-display);font-weight:600}
+.kpi .kl b small{color:var(--ink-3);font-weight:500;font-family:var(--f-body)}
+.bar{position:relative;height:8px;border-radius:99px;background:var(--surface-2)}
+.bar>i{position:absolute;inset-block:0;inset-inline-start:0;border-radius:99px;background:var(--accent)}
+.bar>i.ok{background:var(--good)}
+.bar>i.low{background:var(--warn)}
+.bar>em{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-3);border-radius:2px}
+.kpi .hint{font-size:12px;color:var(--ink-3)}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.tile{background:var(--surface-2);border-radius:12px;padding:10px 12px}
+.tile b{display:block;font-family:var(--f-display);font-weight:600;font-size:22px;font-variant-numeric:tabular-nums}
+.tile span{font-size:12px;color:var(--ink-2)}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--ink-3);font-size:10px;font-family:var(--f-body)}
+.feed{display:flex;flex-direction:column;gap:10px}
+.feed .visit{box-shadow:none;background:var(--surface-2)}
+.split{display:grid;grid-template-columns:1fr;gap:14px}
+@media (min-width:640px){.split{grid-template-columns:1fr 1fr}.tiles{grid-template-columns:repeat(4,1fr)}}
+
+/* guide */
+.guide details{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:0}
+.guide summary{list-style:none;cursor:pointer;padding:14px;font-family:var(--f-display);font-weight:600;font-size:15px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.guide summary::-webkit-details-marker{display:none}
+.guide summary::after{content:"+";font-size:20px;color:var(--ink-3);line-height:1}
+.guide details[open] summary::after{content:"−"}
+.guide .gb{padding:0 14px 14px;display:flex;flex-direction:column;gap:10px;font-size:14px;max-width:65ch}
+.guide ol,.guide ul{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px}
+.guide .say{background:var(--accent-soft);border-radius:10px;padding:8px 10px}
+.guide .obj{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.guide .obj b{display:block;margin-bottom:2px}
+
+/* sheet */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:720px;max-height:92%;border-radius:20px 20px 0 0;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sheet-h{padding:14px 16px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line)}
+.sheet-h h2{margin:0;font-family:var(--f-display);font-weight:600;font-size:17px;line-height:1.3}
+.sheet-h p{margin:2px 0 0;font-size:13px;color:var(--ink-2)}
+.sheet-b{overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px;overscroll-behavior:contain}
+.sheet-f{padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap}
+.sheet-f .btn{flex:1 1 auto}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>label,.field>.lab{font-size:13px;font-weight:600;color:var(--ink-2)}
+.field .help{font-size:12px;color:var(--ink-3)}
+.seg{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{border:1.5px solid var(--line);border-radius:12px;padding:10px;text-align:center;font-weight:600;font-size:14px;cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:center;gap:6px}
+.seg input:checked+label{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
+.checks{display:flex;flex-direction:column;gap:2px;background:var(--surface-2);border-radius:12px;padding:6px}
+.checks label{display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:8px;cursor:pointer;font-size:14px}
+.checks input{width:20px;height:20px;accent-color:var(--accent);flex:none;margin-top:1px}
+.err{color:var(--bad);font-size:13px;font-weight:600}
+.pick{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.pick:last-child{border-bottom:0}
+.pick .p-main{flex:1;min-width:0}
+.pick .p-name{font-weight:700;font-size:15px}
+.pick .p-sub{font-size:12px;color:var(--ink-2)}
+.pick .tog{appearance:none;width:44px;height:44px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);display:grid;place-items:center;cursor:pointer;color:var(--ink-2);flex:none}
+.pick .tog.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.pick .tog.lock{background:var(--good-soft);border-color:var(--good-soft);color:var(--good)}
+.pick .tog svg{width:20px;height:20px}
+.grp-h{font-size:12px;font-weight:700;color:var(--ink-3);margin-top:6px;letter-spacing:.02em}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;margin:0}
+.kv dt{color:var(--ink-3)}
+.kv dd{margin:0;font-weight:600;min-width:0;overflow-wrap:anywhere}
+.phone{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-variant-numeric:tabular-nums;direction:ltr;justify-content:flex-end}
+
+#toast{position:fixed;inset-inline:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:60;display:flex;justify-content:center;pointer-events:none}
+#toast div{background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:var(--shadow);max-width:520px}
+@media (prefers-reduced-motion: no-preference){
+  .sheet{animation:up .22s ease-out}
+  @keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="brand">زيارات بارتك<small><i class="live" id="live" title="غير متصل"></i><span id="hdr-sub">جدول زيارات المبيعات اليومي</span></small></div>
+    <div class="who" id="who"></div>
+  </header>
+  <main id="view" class="wrap">
+    <div class="empty"><b>جارٍ التحميل…</b></div>
+  </main>
+  <nav class="tabs" aria-label="الأقسام" hidden>
+    <button data-act="tab" data-tab="today" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18M9 15l2 2 4-4"/></svg>اليوم</button>
+    <button data-act="tab" data-tab="customers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .7 3.2 2.5 3.5 5.2"/></svg>العملاء</button>
+    <button data-act="tab" data-tab="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>المتابعة</button>
+    <button data-act="tab" data-tab="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6"/></svg>الدليل</button>
+  </nav>
+  <div id="sheet-root"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script>
+/* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
+const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
+const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
+</script>
+<script>
+(function(){
+"use strict";
+
+/* ---------- constants ---------- */
+const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10};
+const ST = {current:"حالي", lapsed:"سابق", new:"جديد"};
+const PURPOSE = {order:"أخذ طلبية", intro:"تعريف ببارتك", followup:"متابعة", recover:"استرجاع العميل", collect:"تحصيل / تسليم"};
+const RESULT = {order:"طلبية ✓", interested:"مهتم - يحتاج متابعة", notnow:"غير مهتم حالياً", absent:"لم يتواجد"};
+const CHANNEL = {visit:"زيارة ميدانية", call:"اتصال"};
+const TYPES = ["ورشة","مركز صيانة","مكتب تأجير","شركة صيانة","أخرى"];
+const CHECKS = [
+  ["goal","حددت هدف الزيارة قبل أن أبدأ"],
+  ["need","سألت العميل عن احتياجه الحالي (السيارات والقطع هذا الأسبوع)"],
+  ["value","ربطت بارتك باحتياجه: السرعة، توفر القطعة، السعر"],
+  ["ask","طلبت الطلبية بشكل صريح"],
+  ["next","اتفقنا على خطوة قادمة بموعد محدد"],
+  ["dm","أعرف صاحب قرار الشراء ورقمه"]
+];
+const MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const TABS = ["today","customers","dash","guide"];
+
+/* ---------- state ---------- */
+const S = {
+  email:null, me:null, team:new Map(), isOwner:false,
+  customers:new Map(), visits:[], visitById:new Map(), cfg:{...DEF},
+  der:new Map(), lastVisit:new Map(),
+  loaded:false, tab:"today", mounted:null,
+  day:todayStr(), filter:"all", q:"", sheet:null
+};
+try{ const t = localStorage.getItem("ptv-tab"); if(TABS.includes(t)) S.tab=t; }catch(e){}
+if(TABS.includes(location.hash.slice(1))) S.tab = location.hash.slice(1);
+let sb = null, channel = null, lastLoad = 0, installEvt = null;
+
+/* ---------- utils ---------- */
+function $(s,el){return (el||document).querySelector(s);}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function pad(n){return String(n).padStart(2,"0");}
+function ymd(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
+function todayStr(){return ymd(new Date());}
+function parse(s){const p=s.split("-").map(Number);return new Date(Date.UTC(p[0],p[1]-1,p[2]));}
+function addDays(s,n){const d=parse(s);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+function diff(a,b){return Math.round((parse(b)-parse(a))/864e5);}
+function dow(s){return parse(s).getUTCDay();}
+function weekStart(s){return addDays(s,-((dow(s)+1)%7));} /* Saturday-based work week, Friday off */
+function monthKey(s){return s.slice(0,7);}
+function monthsBetween(a,b){const [ay,am]=a.split("-").map(Number),[by,bm]=b.split("-").map(Number);return (by-ay)*12+(bm-am);}
+function uuid(){ if(window.crypto&&crypto.randomUUID) return crypto.randomUUID(); return "id-"+Date.now().toString(36)+Math.random().toString(36).slice(2,10); }
+const fmtLong = new Intl.DateTimeFormat("ar-u-ca-gregory-nu-latn",{weekday:"long",day:"numeric",month:"long",timeZone:"UTC"});
+const fmtShort = new Intl.DateTimeFormat("ar-u-ca-gregory-nu-latn",{day:"numeric",month:"short",timeZone:"UTC"});
+function dLong(s){return fmtLong.format(parse(s));}
+function dShort(s){return fmtShort.format(parse(s));}
+function ago(s){
+  if(!s) return "لم تُسجَّل زيارة";
+  const n=diff(s,todayStr());
+  if(n<=0) return "اليوم"; if(n===1) return "أمس"; if(n===2) return "منذ يومين";
+  if(n<=10) return "منذ "+n+" أيام"; return "منذ "+n+" يوماً";
+}
+function waLink(p){const d=String(p||"").replace(/\D/g,"");if(!d) return "";return "https://wa.me/"+(d.startsWith("0")?"966"+d.slice(1):d);}
+function initials(c){const n=(c.person&&c.person!=="—"?c.person:c.org)||"؟";return n.replace(/^(م\.|ابو|أبو)\s*/,"").trim().charAt(0)||"؟";}
+function cname(c){return c? (c.person&&c.person!=="—"? c.person : (c.title||"بدون اسم")) : "عميل محذوف";}
+function pct(a,b){return b>0?Math.min(100,Math.round(a/b*100)):0;}
+function teamName(email){ if(!email) return "من جدول الإكسل"; const t=S.team.get(String(email).toLowerCase()); return (t&&t.name)||String(email).split("@")[0]; }
+const ICON = {
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  prev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  next:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
+  close:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  out:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M9 8l-4 4 4 4M5 12h10"/></svg>',
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>'
+};
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg){const t=$("#toast");t.innerHTML="<div>"+esc(msg)+"</div>";clearTimeout(toastT);toastT=setTimeout(()=>{t.innerHTML="";},2800);}
+
+/* run a Supabase request; returns data or null (and explains the failure) */
+async function guard(q, okMsg){
+  try{
+    const r = await q; if(r.error) throw r.error;
+    if(okMsg) toast(okMsg);
+    return r.data==null ? true : r.data;
+  }catch(e){
+    const m = String((e&&e.message)||"");
+    if((e&&e.code)==="42501" || /row-level security|permission/i.test(m)) toast("لم يُحفظ: حسابك لا يملك صلاحية هذا الإجراء.");
+    else if(/JWT|session/i.test(m)) { toast("انتهت الجلسة، سجّل الدخول مرة أخرى."); }
+    else toast("تعذّر الحفظ، تحقق من الاتصال بالإنترنت وحاول مرة أخرى.");
+    console.error(e);
+    return null;
+  }
+}
+
+/* ---------- row mapping ---------- */
+function rowToCust(r){return {id:r.id, person:r.person||"", title:r.title||"", org:r.org||"", area:r.area||"", phone:r.phone||"", phone2:r.phone2||"", type:r.type||"", base:r.base||"new", since:r.since||"", lastVisit:r.last_visit||"", note:r.note||""};}
+function rowToVisit(r){return {id:r.id, customerId:r.customer_id, date:r.date, time:r.time||"", kind:r.kind||"", purpose:r.purpose||"", state:r.state, result:r.result||"", channel:r.channel||"visit", notes:r.notes||"", next:{text:r.next_text||"", date:r.next_date||""}, checks:r.checks||{}, coach:{text:r.coach_text||"", at:r.coach_at}, by:r.by_email, doneBy:r.done_by, doneAt:r.done_at||"", createdAt:r.created_at||"", unplanned:!!r.unplanned};}
+function putVisit(r){ const v=rowToVisit(r); const i=S.visits.findIndex(x=>x.id===v.id); if(i>=0) S.visits[i]=v; else S.visits.push(v); S.visitById.set(v.id,v); }
+function dropVisit(id){ S.visits=S.visits.filter(x=>x.id!==id); S.visitById.delete(id); }
+function putCust(r){ S.customers.set(r.id,rowToCust(r)); }
+
+/* ---------- status engine ---------- */
+/* base: current | lapsed | new (status at import / creation); since: date that status was confirmed.
+   Orders are the visits recorded with result "order". */
+function derive(c, today, cfg, od){
+  const N = cfg.ordersToConvert, L = cfg.lapsedDays;
+  let established = c.base!=="new", convertedOn=null, recovered=[];
+  let ref = c.base==="current" ? (c.since||null) : null;
+  let n=0;
+  for(const d of od){
+    n++;
+    if(!established){ if(n>=N){established=true;convertedOn=d;} ref=d; continue; }
+    if(!ref || diff(ref,d)>=L) recovered.push(d);
+    if(!ref || d>ref) ref=d;
+  }
+  let status;
+  if(!established) status="new";
+  else status = (!ref || diff(ref,today)>=L) ? "lapsed" : "current";
+  return {status, count:od.length, lastOrder:od.length?od[od.length-1]:null, convertedOn, recovered, toGo:Math.max(0,N-od.length)};
+}
+function recompute(){
+  const t=todayStr(), ob=new Map();
+  for(const v of S.visits) if(v.state==="done"&&v.result==="order"){ if(!ob.has(v.customerId)) ob.set(v.customerId,[]); ob.get(v.customerId).push(v.date); }
+  S.der = new Map();
+  for(const c of S.customers.values()) S.der.set(c.id, derive(c,t,S.cfg,(ob.get(c.id)||[]).sort()));
+  S.lastVisit = new Map();
+  for(const c of S.customers.values()) if(c.lastVisit) S.lastVisit.set(c.id,c.lastVisit);
+  for(const v of S.visits){ if(v.state!=="done") continue; const cur=S.lastVisit.get(v.customerId); if(!cur||v.date>cur) S.lastVisit.set(v.customerId,v.date); }
+}
+function stOf(id){const d=S.der.get(id);return d?d.status:"new";}
+function chipFor(id){
+  const d=S.der.get(id); if(!d) return "";
+  if(d.status==="new") return '<span class="chip new">جديد · '+d.count+'/'+S.cfg.ordersToConvert+'</span>';
+  return '<span class="chip '+d.status+'">'+ST[d.status]+'</span>';
+}
+
+/* ---------- data actions ---------- */
+function visitsOn(day){return S.visits.filter(v=>v.date===day).sort((a,b)=>{
+  const ta=a.time||"99:99", tb=b.time||"99:99"; if(ta!==tb) return ta<tb?-1:1; return (a.createdAt||"")<(b.createdAt||"")?-1:1; });}
+function visitFor(cid, day){return S.visits.find(v=>v.customerId===cid && v.date===day);}
+function defaultPurpose(cid){const d=S.der.get(cid)||{status:"new",count:0};return d.status==="current"?"order":d.status==="lapsed"?"recover":(d.count>0?"followup":"intro");}
+
+async function createVisit(cid, day, extra){
+  const row = Object.assign({id:uuid(), customer_id:cid, date:day, time:"", kind:stOf(cid), purpose:defaultPurpose(cid), state:"planned", by_email:S.email}, extra||{});
+  const r = await guard(sb.from("visits").insert(row).select().single());
+  if(r){ putVisit(r); refresh(); return r.id; }
+  return null;
+}
+async function updateVisit(id, patch, okMsg){
+  const r = await guard(sb.from("visits").update(patch).eq("id",id).select().single(), okMsg);
+  if(r){ putVisit(r); refresh(); }
+  return !!r;
+}
+async function removeVisit(id){
+  const v=S.visitById.get(id); if(!v) return false;
+  if(v.state==="done"){ toast("لا يمكن حذف زيارة مُنجزة، عدّل نتيجتها بدلاً من ذلك."); return false; }
+  const r = await guard(sb.from("visits").delete().eq("id",id), "أُزيلت من الخطة");
+  if(r){ dropVisit(id); refresh(); }
+  return !!r;
+}
+
+/* ---------- auth + boot ---------- */
+async function boot(){
+  if(!window.supabase || SUPABASE_URL.startsWith("__")){
+    $("#view").innerHTML='<div class="notice"><b>التطبيق غير مربوط بقاعدة البيانات بعد.</b><br>تحقق من الاتصال بالإنترنت، أو أكمل إعداد Supabase.</div>'; return;
+  }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {auth:{persistSession:true, autoRefreshToken:true, storageKey:"ptv-auth"}});
+  sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT") showLogin(); });
+  const {data} = await sb.auth.getSession();
+  if(data && data.session) start(data.session); else showLogin();
+}
+function showLogin(msg){
+  S.loaded=false; S.mounted=null; closeSheet();
+  if(channel){ try{ sb.removeChannel(channel); }catch(e){} channel=null; }
+  $(".tabs").hidden=true; $("#who").innerHTML=""; setLive(false);
+  $("#view").innerHTML='<form class="login" id="login" novalidate>'
+    +'<img class="logo" src="icon-192.png" alt="">'
+    +'<h1>أهلاً بك في زيارات بارتك</h1><p>سجّل الدخول بالإيميل وكلمة المرور التي أعطاك إياها المدير.</p>'
+    +'<div class="field"><label for="lg-email">الإيميل</label><input id="lg-email" class="input" type="email" autocomplete="username" dir="ltr" inputmode="email" required></div>'
+    +'<div class="field"><label for="lg-pass">كلمة المرور</label><input id="lg-pass" class="input" type="password" autocomplete="current-password" dir="ltr" required></div>'
+    +'<div class="err" id="lg-err"'+(msg?'':' hidden')+'>'+esc(msg||"")+'</div>'
+    +'<button class="btn primary" id="lg-btn" type="submit">تسجيل الدخول</button>'
+    +'<p class="v-sub">نسيت كلمة المرور؟ اطلب من المدير إعادة تعيينها.</p>'
+    +installHTML()+'</form>';
+  $("#login").addEventListener("submit",async e=>{
+    e.preventDefault();
+    const em=$("#lg-email").value.trim(), pw=$("#lg-pass").value, err=$("#lg-err"), btn=$("#lg-btn");
+    if(!em||!pw){ err.textContent="اكتب الإيميل وكلمة المرور."; err.hidden=false; return; }
+    btn.disabled=true; btn.textContent="جارٍ الدخول…";
+    const {data,error} = await sb.auth.signInWithPassword({email:em,password:pw});
+    if(error){ err.textContent = /invalid/i.test(error.message)?"الإيميل أو كلمة المرور غير صحيحة.":"تعذّر تسجيل الدخول، تحقق من الإنترنت."; err.hidden=false; btn.disabled=false; btn.textContent="تسجيل الدخول"; return; }
+    start(data.session);
+  });
+}
+async function start(session){
+  S.email = String(session.user.email||"").toLowerCase();
+  $("#view").innerHTML='<div class="empty"><b>جارٍ تحميل البيانات…</b>العملاء والزيارات والأهداف.</div>';
+  const ok = await loadAll();
+  if(!ok) return;
+  S.me = S.team.get(S.email);
+  if(!S.me){
+    $("#view").innerHTML='<div class="notice"><b>حسابك غير مضاف إلى فريق المبيعات.</b><br>اطلب من المدير إضافة الإيميل '+esc(S.email)+' إلى الفريق.</div><button class="btn" data-act="logout">تسجيل الخروج</button>';
+    return;
+  }
+  S.isOwner = S.me.role==="manager";
+  renderWho(); $(".tabs").hidden=false;
+  subscribe();
+  S.loaded=true; refresh();
+}
+async function fetchAllVisits(){
+  const out=[]; let from=0;
+  for(;;){
+    const {data,error} = await sb.from("visits").select("*").order("date",{ascending:false}).order("id").range(from,from+999);
+    if(error) throw error;
+    out.push(...data); if(data.length<1000) break; from+=1000;
+  }
+  return out;
+}
+async function loadAll(){
+  try{
+    const [c,cfg,team,visits] = await Promise.all([
+      sb.from("customers").select("*"),
+      sb.from("config").select("data").eq("id",1).maybeSingle(),
+      sb.from("team").select("*"),
+      fetchAllVisits()
+    ]);
+    if(c.error) throw c.error; if(team.error) throw team.error;
+    S.customers = new Map(c.data.map(r=>[r.id,rowToCust(r)]));
+    S.team = new Map(team.data.map(t=>[String(t.email).toLowerCase(),t]));
+    S.cfg = Object.assign({},DEF,(cfg.data&&cfg.data.data)||{});
+    S.visits = visits.map(rowToVisit); S.visitById = new Map(S.visits.map(v=>[v.id,v]));
+    lastLoad = Date.now();
+    return true;
+  }catch(e){
+    console.error(e);
+    if(/JWT|session|token/i.test(String(e.message))) { await sb.auth.signOut(); return false; }
+    $("#view").innerHTML='<div class="notice"><b>تعذّر تحميل البيانات.</b><br>تحقق من الاتصال بالإنترنت ثم أعد المحاولة.</div><button class="btn primary" data-act="reload">إعادة المحاولة</button>';
+    return false;
+  }
+}
+function subscribe(){
+  if(channel) return;
+  channel = sb.channel("ptv-live")
+    .on("postgres_changes",{event:"*",schema:"public",table:"visits"},p=>{ if(p.eventType==="DELETE") dropVisit(p.old.id); else putVisit(p.new); scheduleRefresh(); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"customers"},p=>{ if(p.eventType==="DELETE") S.customers.delete(p.old.id); else putCust(p.new); scheduleRefresh(); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"config"},p=>{ if(p.new&&p.new.data){ S.cfg=Object.assign({},DEF,p.new.data); scheduleRefresh(); } })
+    .subscribe(status=>{ setLive(status==="SUBSCRIBED"); });
+}
+function setLive(on){ const l=$("#live"); l.classList.toggle("on",!!on); l.title= on?"متصل لايف":"غير متصل"; }
+let rT=null;
+function scheduleRefresh(){ if(rT) return; rT=setTimeout(()=>{rT=null;refresh();},120); }
+/* phones drop sockets in the background: reload when the app comes back */
+document.addEventListener("visibilitychange",async()=>{
+  if(document.visibilityState!=="visible"||!S.loaded) return;
+  if(Date.now()-lastLoad>30000){ if(await loadAll()) refresh(); }
+});
+function refresh(){ if(!S.loaded) return; recompute(); renderView(); if(S.sheet && S.sheet.onUpdate) S.sheet.onUpdate(); }
+
+function renderWho(){
+  const el=$("#who"); if(!S.me) return;
+  el.innerHTML='<span class="av"></span><span class="nm"></span>'+(S.isOwner?'<span class="badge">مدير</span>':'')
+    +'<button class="iconbtn" data-act="logout" aria-label="تسجيل الخروج" title="تسجيل الخروج">'+ICON.out+'</button>';
+  el.querySelector(".av").textContent=(S.me.name||"?").charAt(0);
+  el.querySelector(".nm").textContent=S.me.name||S.email;
+}
+
+/* ---------- install (Android) ---------- */
+window.addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); installEvt=e; document.querySelectorAll("[data-install]").forEach(x=>x.hidden=false); });
+window.addEventListener("appinstalled",()=>{ installEvt=null; document.querySelectorAll("[data-install]").forEach(x=>x.hidden=true); toast("تم تثبيت التطبيق على الشاشة الرئيسية"); });
+function isStandalone(){ return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone; }
+function installHTML(){ if(isStandalone()) return ""; return '<div class="install" data-install'+(installEvt?'':' hidden')+'><span>ثبّت التطبيق على شاشتك الرئيسية ليفتح كأي تطبيق.</span><button type="button" class="btn sm primary" data-act="install">تثبيت</button></div>'; }
+
+/* ---------- view routing ---------- */
+function setTab(t){
+  S.tab=t; S.mounted=null;
+  try{localStorage.setItem("ptv-tab",t);}catch(e){}
+  renderView(); window.scrollTo(0,0);
+}
+function renderView(){
+  if(!S.loaded) return;
+  document.querySelectorAll(".tabs button").forEach(b=>{ if(b.dataset.tab===S.tab) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
+  const v=$("#view");
+  if(S.tab==="guide"){ if(S.mounted!=="guide"){ v.innerHTML=guideHTML(); S.mounted="guide"; } return; }
+  if(S.tab==="today"){ v.innerHTML = installHTML()+todayHTML(); S.mounted="today"; }
+  else if(S.tab==="dash"){ v.innerHTML = dashHTML(); S.mounted="dash"; }
+  else if(S.tab==="customers"){
+    if(S.mounted!=="customers"){ v.innerHTML = custShellHTML(); S.mounted="customers";
+      const q=$("#cust-q"); q.value=S.q; q.addEventListener("input",()=>{S.q=q.value;updateCustomers();}); }
+    updateCustomers();
+  }
+}
+
+/* ---------- TODAY ---------- */
+function todayHTML(){
+  const day=S.day, t=todayStr(), list=visitsOn(day), cfg=S.cfg;
+  const done=list.filter(v=>v.state==="done"), orders=done.filter(v=>v.result==="order").length;
+  const ws=weekStart(day);
+  const weekNew=S.visits.filter(v=>v.state==="done"&&v.kind==="new"&&v.date>=ws&&v.date<=addDays(ws,6)).length;
+  const slotsN=Math.max(cfg.dailyTarget,list.length);
+  let slots="";
+  const ordered=[...done.filter(v=>v.result==="order"),...done.filter(v=>v.result!=="order"),...list.filter(v=>v.state==="planned"),...list.filter(v=>v.state==="missed")];
+  for(let i=0;i<slotsN;i++){const v=ordered[i];slots+='<i class="slot '+(!v?"":v.state==="done"?(v.result==="order"?"order":"done"):v.state)+'"></i>';}
+  const isFri=dow(day)===5;
+  const rel = day===t?"اليوم":day===addDays(t,1)?"غداً":day===addDays(t,-1)?"أمس":"";
+  let h='<section class="dayhead">'
+   +'<div class="daynav"><button class="iconbtn" data-act="day-prev" aria-label="اليوم السابق">'+ICON.prev+'</button>'
+   +'<div class="d"><b>'+esc(dLong(day))+'</b><span>'+(rel?rel:'<button class="btn sm ghost" data-act="day-today">العودة لليوم</button>')+'</span></div>'
+   +'<button class="iconbtn" data-act="day-next" aria-label="اليوم التالي">'+ICON.next+'</button></div>'
+   +'<div class="score"><div><div class="big num">'+done.length+' <small>/ '+cfg.dailyTarget+'</small></div><div class="lbl">زيارات منجزة من هدف اليوم</div></div>'
+   +'<div class="lbl" style="text-align:end">'+(done.length>=cfg.dailyTarget?'<span class="chip order">تم تحقيق الهدف</span>':'متبقٍ '+Math.max(0,cfg.dailyTarget-done.length))+'</div></div>'
+   +'<div class="slots'+(slotsN>14?" many":"")+'" aria-hidden="true">'+slots+'</div>'
+   +'<div class="legend"><span><i style="background:var(--good)"></i>طلبية</span><span><i style="background:var(--accent)"></i>زيارة منجزة</span><span><i style="border:1.5px solid var(--accent)"></i>مخططة</span><span><i style="border:1.5px dashed var(--line)"></i>فارغة</span></div>'
+   +'<div class="minis"><div class="mini"><b class="num">'+list.length+'</b><span>في الخطة</span></div><div class="mini"><b class="num">'+orders+'</b><span>طلبيات</span></div><div class="mini"><b class="num">'+weekNew+'/'+cfg.weeklyNew+'</b><span>زيارات جدد بالأسبوع</span></div></div>'
+   +'<div class="row grow"><button class="btn primary" data-act="open-planner">'+ICON.plus.replace("<svg",'<svg width="18" height="18"')+(list.length?"تعديل خطة اليوم":"خطط يومك")+'</button><button class="btn" data-act="open-log">زيارة غير مخططة</button></div>'
+   +'</section>';
+  if(isFri && !list.length) h+='<div class="empty"><b>الجمعة يوم راحة</b>لا توجد زيارات مخططة.</div>';
+  else if(!list.length) h+='<div class="empty"><b>لا توجد زيارات مخططة لهذا اليوم</b>ابدأ يومك بالتخطيط: اختر '+cfg.dailyTarget+' عملاء من القاعدة، بحيث تبدأ بالحاليين المستحقين للزيارة، ثم السابقين، ثم الجدد.</div>';
+  else {
+    const p=list.filter(v=>v.state==="planned"), d=list.filter(v=>v.state!=="planned");
+    if(p.length) h+='<h2 class="sec">بانتظار التنفيذ <small>'+p.length+' زيارة</small></h2><div class="list">'+p.map(v=>visitCard(v)).join("")+'</div>';
+    if(d.length) h+='<h2 class="sec">تم تسجيلها <small>'+d.length+'</small></h2><div class="list">'+d.map(v=>visitCard(v)).join("")+'</div>';
+  }
+  return h;
+}
+function lastNoteFor(cid, beforeDate){
+  return S.visits.filter(x=>x.customerId===cid&&x.state==="done"&&x.notes&&x.date<=beforeDate).sort((a,b)=>a.date<b.date?1:-1)[0]||null;
+}
+function checkScore(v){return CHECKS.filter(c=>v.checks&&v.checks[c[0]]).length;}
+function visitCard(v,o){
+  o=o||{};
+  const c=S.customers.get(v.customerId)||{};
+  const phone=c.phone||"";
+  let h='<article class="visit st-'+esc(v.state)+'">'
+   +'<div class="v-top"><div style="min-width:0"><div class="v-name">'+(o.noLink?esc(cname(c)):'<button data-act="cust" data-id="'+esc(v.customerId)+'">'+esc(cname(c))+'</button>')+'</div>'
+   +'<div class="v-sub">'+esc([c.org,c.title].filter(Boolean).join(" · "))+'</div>'
+   +(o.showBy?'<div class="v-sub">سجّلها: '+esc(teamName(v.doneBy||v.by))+'</div>':'')+'</div>'
+   +'<div class="v-time">'+(o.showDate?esc(dShort(v.date))+" ":"")+(v.time?esc(v.time):"")+'</div></div>'
+   +'<div class="v-meta">'+chipFor(v.customerId)+'<span>الهدف: '+esc(PURPOSE[v.purpose]||"")+'</span>'
+   +(v.state==="done"&&v.result?'<span class="chip '+esc(v.result)+'">'+esc(RESULT[v.result])+'</span>':"")
+   +(v.state==="done"&&v.channel?'<span class="chip muted">'+esc(CHANNEL[v.channel])+'</span>':"")
+   +(v.state==="missed"?'<span class="chip missed">لم تتم</span>':"")
+   +(v.state==="done"&&v.checks&&Object.keys(v.checks).length?'<span class="chip muted">الجودة '+checkScore(v)+'/6</span>':"")+'</div>';
+  if(v.state==="planned"){
+    const last=lastNoteFor(v.customerId,v.date);
+    if(last) h+='<div class="v-note"><span class="k">آخر ملاحظة · '+esc(dShort(last.date))+'</span>'+esc(last.notes)+(last.next&&last.next.text?"\nالخطوة المتفق عليها: "+esc(last.next.text):"")+'</div>';
+    else if(stOf(v.customerId)==="new") h+='<div class="v-note"><span class="k">نصيحة</span>عميل جديد: هدفك أول طلبية صغيرة، وتعرّف على صاحب قرار الشراء.</div>';
+  } else if(v.notes){
+    h+='<div class="v-note"><span class="k">ملاحظات الزيارة</span>'+esc(v.notes)+(v.next&&v.next.text?"\nالخطوة القادمة: "+esc(v.next.text)+(v.next.date?" ("+esc(dShort(v.next.date))+")":""):"")+'</div>';
+  }
+  if(v.coach&&v.coach.text) h+='<div class="coachnote"><span class="k">توجيه المدير</span>'+esc(v.coach.text)+'</div>';
+  h+='<div class="v-actions">';
+  if(phone) h+='<a class="btn sm" href="tel:'+esc(phone)+'">اتصال</a><a class="btn sm" href="'+esc(waLink(phone))+'" target="_blank" rel="noopener">واتساب</a>';
+  h+='<button class="btn sm '+(v.state==="planned"?"primary":"")+'" data-act="result" data-id="'+esc(v.id)+'">'+(v.state==="planned"?"سجّل النتيجة":"تعديل")+'</button>';
+  if(S.isOwner && v.state!=="planned") h+='<button class="btn sm ghost" data-act="coach" data-id="'+esc(v.id)+'">'+(v.coach&&v.coach.text?"تعديل التوجيه":"أضف توجيهاً")+'</button>';
+  h+='</div></article>';
+  return h;
+}
+
+/* ---------- CUSTOMERS ---------- */
+function custShellHTML(){
+  return '<div class="searchbar"><input id="cust-q" class="input" type="search" placeholder="ابحث بالاسم أو الجهة أو المنطقة أو الرقم" aria-label="بحث العملاء">'
+   +'<button class="btn primary" data-act="new-cust" aria-label="إضافة عميل">'+ICON.plus.replace("<svg",'<svg width="20" height="20"')+'</button></div>'
+   +'<div class="filters" id="cust-f"></div><div class="list" id="cust-list"></div>';
+}
+function matchQ(c,q){ if(!q) return true; q=q.trim(); return [c.person,c.org,c.title,c.area,c.phone,c.type].some(x=>x&&String(x).includes(q)); }
+function updateCustomers(){
+  const all=[...S.customers.values()];
+  const counts={all:all.length,current:0,lapsed:0,new:0,due:0};
+  const ws=weekStart(todayStr());
+  for(const c of all){const s=stOf(c.id);counts[s]++; if(s==="current"&&!(S.lastVisit.get(c.id)>=ws)) counts.due++;}
+  const F=[["all","الكل"],["current","حالي"],["due","حاليون لم يُزاروا هذا الأسبوع"],["lapsed","سابق"],["new","جديد"]];
+  $("#cust-f").innerHTML=F.map(f=>'<button data-act="filter" data-f="'+f[0]+'" aria-pressed="'+(S.filter===f[0])+'">'+f[1]+' <span class="num">'+counts[f[0]]+'</span></button>').join("");
+  let rows=all.filter(c=>matchQ(c,S.q));
+  if(S.filter==="due") rows=rows.filter(c=>stOf(c.id)==="current"&&!(S.lastVisit.get(c.id)>=ws));
+  else if(S.filter!=="all") rows=rows.filter(c=>stOf(c.id)===S.filter);
+  const rank={current:0,lapsed:1,new:2};
+  rows.sort((a,b)=>{const sa=rank[stOf(a.id)],sb2=rank[stOf(b.id)]; if(sa!==sb2) return sa-sb2; const la=S.lastVisit.get(a.id)||"",lb=S.lastVisit.get(b.id)||""; return la<lb?-1:la>lb?1:0;});
+  const el=$("#cust-list");
+  if(!all.length){ el.innerHTML='<div class="empty"><b>قاعدة العملاء فارغة</b>أضف أول عميل بزر + في الأعلى.</div>'; return; }
+  if(!rows.length){ el.innerHTML='<div class="empty"><b>لا توجد نتائج</b>جرّب كلمة بحث أخرى أو فلتراً مختلفاً.</div>'; return; }
+  el.innerHTML=rows.map(c=>{
+    const s=stOf(c.id), lv=S.lastVisit.get(c.id), d=S.der.get(c.id);
+    const overdue = s==="current" && (!lv || diff(lv,todayStr())>=7);
+    return '<button class="cust" data-act="cust" data-id="'+esc(c.id)+'"><span class="avatar '+s+'">'+esc(initials(c))+'</span>'
+     +'<span class="c-main"><span class="c-name">'+esc(cname(c))+'</span><span class="c-sub">'+esc([c.org,c.type].filter(Boolean).join(" · "))+'</span></span>'
+     +'<span class="c-side">'+chipFor(c.id)+'<span class="'+(overdue?"due":"")+'">'+esc(ago(lv))+'</span>'+(d&&d.count?'<span>'+d.count+' طلبية</span>':'')+'</span></button>';
+  }).join("");
+}
+
+/* ---------- DASHBOARD ---------- */
+function kpi(label, val, target, opt){
+  opt=opt||{};
+  const p = target? pct(val,target):0;
+  const cls = target? (val>=target?"ok":(opt.pace!=null&&val<target*opt.pace*0.8?"low":"")) : "";
+  return '<div class="kpi"><div class="kl"><span>'+label+'</span><b class="num">'+(opt.pct?val+'%':val+(target?' <small>/ '+target+'</small>':''))+'</b></div>'
+   +(target?'<div class="bar"><i class="'+cls+'" style="width:'+p+'%"></i>'+(opt.pace!=null&&opt.pace<1?'<em style="inset-inline-start:calc('+Math.round(opt.pace*100)+'% - 1px)" title="الوتيرة المطلوبة حتى اليوم"></em>':'')+'</div>':'')
+   +(opt.hint?'<div class="hint">'+opt.hint+'</div>':'')+'</div>';
+}
+function dashHTML(){
+  const t=todayStr(), cfg=S.cfg, ws=weekStart(t), we=addDays(ws,6), mk=monthKey(t);
+  const doneAll=S.visits.filter(v=>v.state==="done");
+  const today=doneAll.filter(v=>v.date===t);
+  const week=doneAll.filter(v=>v.date>=ws&&v.date<=we);
+  const month=doneAll.filter(v=>monthKey(v.date)===mk);
+  let workDaysElapsed=0; for(let d=ws;d<=t;d=addDays(d,1)) if(dow(d)!==5) workDaysElapsed++;
+  const pace = Math.min(1,workDaysElapsed/6);
+  const all=[...S.customers.values()];
+  const cur=all.filter(c=>stOf(c.id)==="current"), lap=all.filter(c=>stOf(c.id)==="lapsed"), nw=all.filter(c=>stOf(c.id)==="new");
+  const covered=cur.filter(c=>S.lastVisit.get(c.id)>=ws).length;
+  let conv=0, rec=0;
+  for(const c of all){const d=S.der.get(c.id); if(d.convertedOn&&monthKey(d.convertedOn)===mk) conv++; rec+=d.recovered.filter(x=>monthKey(x)===mk).length;}
+  const planNow = cfg.planStartCount + cfg.monthlyConv*Math.max(0,monthsBetween(cfg.planStartMonth,mk));
+  const wq = week.length? week : doneAll.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,30);
+  const q = {
+    score: wq.length? Math.round(wq.reduce((s,v)=>s+checkScore(v),0)/(wq.length*6)*100):0,
+    notes: wq.length? Math.round(wq.filter(v=>(v.notes||"").trim().length>=15).length/wq.length*100):0,
+    next: wq.length? Math.round(wq.filter(v=>v.next&&v.next.text).length/wq.length*100):0,
+    field: wq.length? Math.round(wq.filter(v=>v.channel!=="call").length/wq.length*100):0
+  };
+  const mName = MONTHS[Number(mk.slice(5))-1];
+  let h='<div class="tiles">'
+   +'<div class="tile"><b>'+today.length+'<small style="font-size:13px;color:var(--ink-3)"> / '+cfg.dailyTarget+'</small></b><span>زيارات اليوم</span></div>'
+   +'<div class="tile"><b>'+today.filter(v=>v.result==="order").length+'</b><span>طلبيات اليوم</span></div>'
+   +'<div class="tile"><b>'+cur.length+'</b><span>عملاء حاليون الآن</span></div>'
+   +'<div class="tile"><b>'+lap.length+'</b><span>سابقون للاسترجاع</span></div></div>';
+  h+='<div class="split">';
+  h+='<section class="card"><h3>هذا الأسبوع <small>'+esc(dShort(ws))+' – '+esc(dShort(addDays(ws,5)))+'</small></h3>'
+   +kpi("الزيارات المنجزة",week.length,cfg.dailyTarget*6,{pace})
+   +kpi("زيارات عملاء جدد",week.filter(v=>v.kind==="new").length,cfg.weeklyNew,{pace})
+   +kpi("الطلبيات الناجحة",week.filter(v=>v.result==="order").length,cfg.weeklyOrders,{pace})
+   +kpi("تغطية الحاليين بزيارة أسبوعية",covered,cur.length,{pace,hint:"كل عميل حالي يجب أن يُزار مرة واحدة في الأسبوع"})
+   +'</section>';
+  h+='<section class="card"><h3>شهر '+esc(mName)+' <small>الخطة مقابل الفعلي</small></h3>'
+   +kpi("تحويل جدد إلى حاليين",conv,cfg.monthlyConv,{hint:"يصبح العميل الجديد حالياً بعد "+cfg.ordersToConvert+" طلبيات"})
+   +kpi("استرجاع عملاء سابقين",rec,0,{hint:"السابق يعود حالياً بأول طلبية جديدة"})
+   +kpi("طلبيات الشهر",month.filter(v=>v.result==="order").length,0)
+   +kpi("عدد العملاء الحاليين مقابل خطة الشهر",cur.length,planNow,{hint:"الخطة: "+cfg.planStartCount+" عملاء في البداية + "+cfg.monthlyConv+" كل شهر"})
+   +'</section></div>';
+  h+='<section class="card"><h3>الزيارات المنجزة · آخر 14 يوماً <small>الخط المتقطع = الهدف</small></h3>'+chart14(t)+'</section>';
+  h+='<section class="card"><h3>جودة الزيارات <small>'+(week.length?"هذا الأسبوع":"آخر الزيارات")+' · '+wq.length+' زيارة</small></h3>'
+   +kpi("متوسط قائمة الجودة",q.score,100,{pct:1,hint:"6 خطوات للزيارة الاحترافية، تجدها في الدليل"})
+   +kpi("زيارات بملاحظات واضحة",q.notes,100,{pct:1})
+   +kpi("زيارات بخطوة قادمة محددة",q.next,100,{pct:1})
+   +kpi("زيارات ميدانية بدل الاتصال",q.field,100,{pct:1,hint:"الزيارة الميدانية مفضّلة على الاتصال"})
+   +'</section>';
+  h+='<section class="card"><h3>قاعدة العملاء</h3><div class="tiles">'
+   +'<div class="tile"><b>'+cur.length+'</b><span>حالي</span></div><div class="tile"><b>'+lap.length+'</b><span>سابق (آخر طلبية قبل '+cfg.lapsedDays+' يوماً أو أكثر)</span></div>'
+   +'<div class="tile"><b>'+nw.length+'</b><span>جديد</span></div><div class="tile"><b>'+nw.filter(c=>S.der.get(c.id).count>0).length+'</b><span>جدد بدأوا الطلب</span></div></div></section>';
+  const feed=S.visits.filter(v=>v.state!=="planned").sort((a,b)=>((b.doneAt||b.date)>(a.doneAt||a.date)?1:-1)).slice(0,20);
+  h+='<section class="card"><h3>آخر النشاط <small>'+(S.isOwner?"أضف توجيهاً على أي زيارة":"توجيهات المدير تظهر على زياراتك")+'</small></h3>'
+   +(feed.length?'<div class="feed">'+feed.map(v=>visitCard(v,{showDate:true,showBy:true})).join("")+'</div>':'<div class="empty"><b>لا يوجد نشاط بعد</b>تظهر هنا كل زيارة يتم تسجيلها، لحظة بلحظة.</div>')
+   +'</section>';
+  if(S.isOwner) h+='<button class="btn" data-act="settings">'+ICON.gear.replace("<svg",'<svg width="18" height="18"')+'أهداف الخطة</button>';
+  return h;
+}
+function chart14(t){
+  const days=[];for(let i=13;i>=0;i--) days.push(addDays(t,-i));
+  const cnt=days.map(d=>S.visits.filter(v=>v.state==="done"&&v.date===d).length);
+  const ord=days.map(d=>S.visits.filter(v=>v.state==="done"&&v.result==="order"&&v.date===d).length);
+  const T=S.cfg.dailyTarget, max=Math.max(T,...cnt)+1;
+  const W=340,H=160,L=8,R=8,top=14,bot=26, ih=H-top-bot, bw=(W-L-R)/14;
+  const y=v=>top+ih-(v/max)*ih;
+  let s='<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="عدد الزيارات اليومية لآخر 14 يوماً">';
+  s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+(top+ih)+'" y2="'+(top+ih)+'" stroke="var(--line)" stroke-width="1"/>';
+  days.forEach((d,i)=>{
+    const x=W-R-(i+1)*bw+3, w=bw-6;  /* newest on the left (RTL time axis) */
+    const fri=dow(d)===5;
+    if(cnt[i]){ s+='<rect x="'+x.toFixed(1)+'" y="'+y(cnt[i]).toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+(top+ih-y(cnt[i])).toFixed(1)+'" rx="3" fill="var(--accent)" opacity="'+(d===t?1:.75)+'"/>';
+      if(ord[i]) s+='<rect x="'+x.toFixed(1)+'" y="'+y(ord[i]).toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+(top+ih-y(ord[i])).toFixed(1)+'" rx="3" fill="var(--good)"/>';
+      s+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(y(cnt[i])-4).toFixed(1)+'" text-anchor="middle">'+cnt[i]+'</text>'; }
+    s+='<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle"'+(fri?' opacity=".5"':'')+(d===t?' font-weight="700"':'')+'>'+Number(d.slice(8))+'</text>';
+  });
+  s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(T).toFixed(1)+'" y2="'+y(T).toFixed(1)+'" stroke="var(--ink-3)" stroke-dasharray="4 4" stroke-width="1"/>';
+  s+='<text x="'+(W-R)+'" y="'+(y(T)-4).toFixed(1)+'" text-anchor="end">الهدف '+T+'</text></svg>';
+  s+='<div class="legend"><span><i style="background:var(--accent)"></i>زيارات منجزة</span><span><i style="background:var(--good)"></i>منها طلبيات</span><span>الأرقام بالأسفل = يوم الشهر، والأحدث على اليسار</span></div>';
+  return s;
+}
+
+/* ---------- GUIDE ---------- */
+function guideHTML(){
+  return '<div class="guide list">'
+  +'<div class="card"><h3>الخطة باختصار</h3><div style="font-size:14px;display:flex;flex-direction:column;gap:6px">'
+  +'<div><b>'+S.cfg.dailyTarget+' زيارات كل يوم</b> بين حاليين وسابقين وجدد، وزيارة واحدة أسبوعياً لكل عميل حالي.</div>'
+  +'<div><b>'+S.cfg.weeklyNew+' زيارة أسبوعياً لعملاء جدد</b>، والهدف تحويل '+S.cfg.monthlyConv+' منهم إلى حاليين كل شهر.</div>'
+  +'<div><b>الجديد يصبح حالياً</b> بعد '+S.cfg.ordersToConvert+' طلبيات. <b>الحالي يصبح سابقاً</b> إذا مر '+S.cfg.lapsedDays+' يوماً على آخر طلبية. <b>السابق يعود حالياً</b> بأول طلبية جديدة.</div></div></div>'
+  +'<details open><summary>روتين يومك</summary><div class="gb"><ol>'
+  +'<li><b>بداية اليوم:</b> خطط '+S.cfg.dailyTarget+' زيارات من تبويب «اليوم». ابدأ بالحاليين الذين لم تزرهم هذا الأسبوع، ثم السابقين، ثم الجدد.</li>'
+  +'<li><b>رتّب الزيارات حسب المنطقة</b> (علي بن علي، أم الحمام، الصناعية) لتقلل وقت التنقل وتزيد عدد الزيارات.</li>'
+  +'<li><b>قبل كل زيارة:</b> اقرأ آخر ملاحظة والخطوة المتفق عليها، وحدد هدفاً واحداً واضحاً.</li>'
+  +'<li><b>بعد كل زيارة مباشرة:</b> سجّل النتيجة والملاحظات خلال 5 دقائق، ولا تؤجلها لآخر اليوم.</li>'
+  +'<li><b>نهاية اليوم:</b> راجع الخطوات القادمة وخطط زيارات الغد.</li></ol></div></details>'
+  +'<details><summary>الزيارة الاحترافية في 6 خطوات</summary><div class="gb"><ol>'
+  +'<li><b>هدف واضح قبل الدخول:</b> طلبية، تعريف، استرجاع، أو متابعة.</li>'
+  +'<li><b>افتتاح قصير وشخصي:</b> اسأل عن ضغط الشغل في الورشة اليوم.</li>'
+  +'<li><b>اسأل قبل أن تعرض:</b><div class="say">«وش السيارات اللي عندكم هالأسبوع؟ فيه قطع تأخرت عليكم أو صعب تلقونها؟»</div></li>'
+  +'<li><b>اربط بارتك بالاحتياج:</b> سرعة التوصيل، توفر القطعة، السعر، والمتابعة الشخصية.</li>'
+  +'<li><b>اطلب الطلبية صراحة:</b><div class="say">«خلني أسجل لك الطلبية الحين وتوصلك اليوم.»</div></li>'
+  +'<li><b>لا تخرج بدون خطوة قادمة بموعد:</b> متى الزيارة القادمة؟ ماذا سأحضر له؟</li></ol>'
+  +'<div>هذه الخطوات هي نفسها «قائمة الجودة» التي تعبئها عند تسجيل كل زيارة.</div></div></details>'
+  +'<details><summary>حسب نوع العميل</summary><div class="gb">'
+  +'<div class="obj"><b><span class="chip current">حالي</span> الهدف: طلبية كل أسبوع</b>اسأل عن القطع المتكررة واقترح طلبية ثابتة. اسأل عن رضاه عن آخر طلبية، فالعميل الحالي أسهل بيع وأغلى خسارة.</div>'
+  +'<div class="obj"><b><span class="chip lapsed">سابق</span> الهدف: طلبية واحدة تعيده</b>اعرف سبب التوقف أولاً واستمع بدون دفاع. اعرض حلاً للسبب وطلبية تجربة صغيرة، وتابعها بنفسك حتى التسليم.</div>'
+  +'<div class="obj"><b><span class="chip new">جديد</span> الهدف: 3 طلبيات ليصبح حالياً</b>ابدأ بطلبية صغيرة سهلة النجاح، وتعرّف على صاحب قرار الشراء. زره أسبوعياً حتى الطلبية الثالثة.</div></div></details>'
+  +'<details><summary>الرد على الاعتراضات</summary><div class="gb">'
+  +'<div class="obj"><b>«عندي مورد ثابت»</b>«ممتاز، خلني أكون خيارك الثاني لما تتأخر عليك قطعة. جربنا بطلبية وحدة وقارن.»</div>'
+  +'<div class="obj"><b>«السعر غالي»</b>اسأل: مقارنة بمين وعلى أي قطعة؟ ثم ذكّره بتكلفة وقوف السيارة في الورشة يوماً إضافياً.</div>'
+  +'<div class="obj"><b>«مو محتاج الحين»</b>«متى عادة تطلب؟ أمر عليك ذاك اليوم.» وسجّل الموعد كخطوة قادمة.</div>'
+  +'<div class="obj"><b>«تأخرتوا علي المرة الماضية»</b>اعتذر واسأل عن التفاصيل، وارفعها للإدارة، واعرض متابعة شخصية لطلبيته القادمة.</div></div></details>'
+  +'<details><summary>كيف تكتب ملاحظة مفيدة</summary><div class="gb">'
+  +'<div>الملاحظة الجيدة تجيب عن أربعة أسئلة: <b>ماذا يحتاج العميل؟ ماذا قال؟ ماذا اتفقنا؟ متى الخطوة القادمة؟</b></div>'
+  +'<div class="say">مثال: «يحتاج فحمات وفلاتر لسيارات كامري أسبوعياً، يشتري حالياً من محل بالحي. أخذت طلبية تجربة 4 فحمات. أمر عليه الأحد للتأكد من التسليم وأعرض طلبية الفلاتر.»</div>'
+  +'<div>تجنب الملاحظات العامة مثل «تمت الزيارة» أو «العميل مهتم».</div></div></details>'
+  +'<details><summary>تثبيت التطبيق على الجوال</summary><div class="gb"><ol>'
+  +'<li>افتح رابط التطبيق في متصفح <b>Chrome</b> على الأندرويد.</li>'
+  +'<li>اضغط زر <b>تثبيت</b> إن ظهر، أو افتح قائمة Chrome (⋮) واختر <b>تثبيت التطبيق</b> أو <b>إضافة إلى الشاشة الرئيسية</b>.</li>'
+  +'<li>افتح التطبيق بعدها من أيقونته، وسيبقى تسجيل دخولك محفوظاً.</li></ol></div></details>'
+  +'</div>';
+}
+
+/* ---------- SHEETS ---------- */
+function openSheet(o){
+  closeSheet();
+  const root=$("#sheet-root");
+  root.innerHTML='<div class="scrim" data-scrim><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-title">'
+   +'<div class="sheet-h"><div><h2 id="sh-title">'+o.title+'</h2>'+(o.sub?'<p>'+o.sub+'</p>':'')+'</div><button class="iconbtn" data-act="close-sheet" aria-label="إغلاق">'+ICON.close+'</button></div>'
+   +'<div class="sheet-b" id="sh-body">'+o.body+'</div>'+(o.foot?'<div class="sheet-f">'+o.foot+'</div>':'')+'</div></div>';
+  root.querySelector("[data-scrim]").addEventListener("click",e=>{ if(e.target.hasAttribute("data-scrim")) closeSheet(); });
+  S.sheet={onUpdate:o.onUpdate||null};
+  document.body.style.overflow="hidden";
+  if(o.mount) o.mount(root);
+}
+function closeSheet(){ const r=$("#sheet-root"); if(r) r.innerHTML=""; S.sheet=null; document.body.style.overflow=""; }
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&S.sheet) closeSheet(); });
+
+/* planner / quick log picker */
+function openPlanner(mode){
+  const day=S.day;
+  const areas=[...new Set([...S.customers.values()].map(c=>c.area).filter(Boolean))];
+  let area="";
+  openSheet({
+    title: mode==="plan" ? "خطة "+esc(dLong(day)) : "تسجيل زيارة غير مخططة",
+    sub: mode==="plan" ? '<span id="pl-count"></span>' : "اختر العميل الذي زرته أو اتصلت به",
+    body:'<input id="pl-q" class="input" type="search" placeholder="بحث بالاسم أو الجهة" aria-label="بحث">'
+      +(areas.length?'<div class="filters" id="pl-areas">'+['<button data-area="" aria-pressed="true">كل المناطق</button>'].concat(areas.map(a=>'<button data-area="'+esc(a)+'" aria-pressed="false">'+esc(a)+'</button>')).join("")+'</div>':'')
+      +'<div id="pl-list"></div>',
+    foot: mode==="plan" ? '<button class="btn primary" data-act="close-sheet">تم</button>' : '',
+    mount(root){
+      $("#pl-q",root).addEventListener("input",draw);
+      const ar=$("#pl-areas",root);
+      if(ar) ar.addEventListener("click",e=>{const b=e.target.closest("[data-area]");if(!b)return;area=b.dataset.area;ar.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));draw();});
+      $("#pl-list",root).addEventListener("click",async e=>{
+        const b=e.target.closest("[data-pick]"); if(!b||b.disabled) return;
+        const cid=b.dataset.pick;
+        if(mode==="log"){
+          const ex=visitFor(cid,day);
+          if(ex){ openResult(ex.id); return; }
+          b.disabled=true; const id=await createVisit(cid,day,{unplanned:true}); if(id) openResult(id,{fresh:true}); else b.disabled=false; return;
+        }
+        const ex=visitFor(cid,day);
+        b.disabled=true;
+        if(ex){ if(ex.state==="planned") await removeVisit(ex.id); else toast("هذه الزيارة مسجّلة مسبقاً لهذا اليوم"); }
+        else await createVisit(cid,day);
+        b.disabled=false;
+      });
+      draw();
+    },
+    onUpdate(){ draw(); }
+  });
+  function draw(){
+    const list=$("#pl-list"); if(!list) return;
+    const qv=($("#pl-q")||{}).value||"";
+    const ws=weekStart(day), we=addDays(ws,6), cfg=S.cfg;
+    if(mode==="plan"){ const pc=$("#pl-count"); if(pc) pc.textContent="في الخطة "+visitsOn(day).length+" من "+cfg.dailyTarget+" زيارات · زيارات الجدد هذا الأسبوع "+S.visits.filter(v=>v.kind==="new"&&v.date>=ws&&v.date<=we&&v.state!=="missed").length+"/"+cfg.weeklyNew; }
+    const all=[...S.customers.values()].filter(c=>matchQ(c,qv)&&(!area||c.area===area));
+    const lv=c=>S.lastVisit.get(c.id)||"";
+    const visitedThisWeek=c=>S.visits.some(v=>v.customerId===c.id&&v.date>=ws&&v.date<=we&&v.state==="done"&&v.date!==day);
+    const groups=[
+      ["حاليون مستحقون للزيارة هذا الأسبوع", all.filter(c=>stOf(c.id)==="current"&&!visitedThisWeek(c)), true],
+      ["سابقون للاسترجاع", all.filter(c=>stOf(c.id)==="lapsed"), true],
+      ["جدد", all.filter(c=>stOf(c.id)==="new").sort((a,b)=>S.der.get(b.id).count-S.der.get(a.id).count), false],
+      ["حاليون تمت زيارتهم هذا الأسبوع", all.filter(c=>stOf(c.id)==="current"&&visitedThisWeek(c)), true]
+    ];
+    let h="";
+    for(const [label,rows,byLast] of groups){
+      if(!rows.length) continue;
+      if(byLast) rows.sort((a,b)=>lv(a)<lv(b)?-1:lv(a)>lv(b)?1:0);
+      h+='<div class="grp-h">'+label+' · '+rows.length+'</div>';
+      h+=rows.map(c=>{
+        const ex=visitFor(c.id,day);
+        const on=!!ex, lock=ex&&ex.state!=="planned";
+        const cls= lock?"tog lock": on?"tog on":"tog";
+        const lbl = mode==="log" ? "سجّل زيارة "+cname(c) : (on?"إزالة "+cname(c)+" من الخطة":"إضافة "+cname(c)+" للخطة");
+        return '<div class="pick"><div class="p-main"><div class="p-name">'+esc(cname(c))+' '+chipFor(c.id)+'</div><div class="p-sub">'+esc([c.org,c.area&&!String(c.org||"").includes(c.area)?c.area:""].filter(Boolean).join(" · "))+' · '+esc(ago(S.lastVisit.get(c.id)))+'</div></div>'
+          +'<button class="'+(mode==="log"?"tog":cls)+'" data-pick="'+esc(c.id)+'" aria-label="'+esc(lbl)+'"'+(mode==="plan"?' aria-pressed="'+on+'"':'')+'>'+(mode==="log"?ICON.next:(on?ICON.check:ICON.plus))+'</button></div>';
+      }).join("");
+    }
+    list.innerHTML = h || '<div class="empty"><b>لا يوجد عملاء مطابقون</b>جرّب بحثاً آخر.</div>';
+  }
+}
+
+/* result sheet */
+function openResult(id, opt){
+  const v=S.visitById.get(id); if(!v){ toast("الزيارة غير موجودة"); return; }
+  const c=S.customers.get(v.customerId)||{};
+  const r=(name,val,label,checked)=>'<input type="radio" name="'+name+'" id="'+name+'-'+val+'" value="'+val+'"'+(checked?" checked":"")+'><label for="'+name+'-'+val+'">'+label+'</label>';
+  const ch=v.channel||"visit";
+  let body='';
+  body+='<div class="field"><span class="lab">طريقة التواصل</span><div class="seg">'+r("rs-ch","visit","زيارة ميدانية",ch==="visit")+r("rs-ch","call","اتصال",ch==="call")+'</div></div>';
+  body+='<div class="field"><span class="lab">النتيجة</span><div class="seg">'+Object.keys(RESULT).map(k=>r("rs-res",k,RESULT[k],v.result===k)).join("")+'</div></div>';
+  body+='<div class="field"><label for="rs-notes">ملاحظات الزيارة</label><textarea id="rs-notes" class="input" placeholder="ماذا يحتاج العميل؟ ماذا قال؟ ماذا اتفقنا؟">'+esc(v.notes||"")+'</textarea><span class="help">اكتب بالتفصيل، فهذه الملاحظة تظهر لك قبل زيارتك القادمة لنفس العميل.</span></div>';
+  body+='<div class="field"><label for="rs-next">الخطوة القادمة</label><input id="rs-next" class="input" value="'+esc(v.next&&v.next.text||"")+'" placeholder="مثال: أمرّ عليه لتأكيد التسليم وأعرض الفلاتر">'
+    +'<input id="rs-nextd" class="input" type="date" value="'+esc(v.next&&v.next.date||"")+'" aria-label="تاريخ الخطوة القادمة" min="'+esc(v.date)+'">'
+    +'<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="rs-auto" checked style="width:18px;height:18px;accent-color:var(--accent)">أضفها تلقائياً إلى خطة ذلك اليوم</label></div>';
+  body+='<div class="field"><span class="lab">قائمة الجودة · <span id="rs-score">0</span>/6</span><div class="checks">'+CHECKS.map(k=>'<label><input type="checkbox" id="rs-ck-'+k[0]+'"'+(v.checks&&v.checks[k[0]]?" checked":"")+'>'+k[1]+'</label>').join("")+'</div></div>';
+  body+='<div class="row grow"><div class="field"><label for="rs-purpose">هدف الزيارة</label><select id="rs-purpose" class="input">'+Object.keys(PURPOSE).map(k=>'<option value="'+k+'"'+(v.purpose===k?" selected":"")+'>'+PURPOSE[k]+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label for="rs-time">الوقت</label><input id="rs-time" class="input" type="time" value="'+esc(v.time||"")+'"></div></div>';
+  body+='<div class="err" id="rs-err" hidden></div>';
+  let foot='<button class="btn primary" id="rs-save">حفظ النتيجة</button>';
+  if(v.state!=="done") foot+='<button class="btn" id="rs-missed">لم تتم الزيارة</button><button class="btn danger" id="rs-del">'+(opt&&opt.fresh?"إلغاء":"إزالة من الخطة")+'</button>';
+  openSheet({
+    title: esc(cname(c)),
+    sub: esc([c.org, dLong(v.date)].filter(Boolean).join(" · ")) + ' ' + chipFor(v.customerId),
+    body, foot,
+    mount(root){
+      const upd=()=>{$("#rs-score").textContent=CHECKS.filter(k=>$("#rs-ck-"+k[0]).checked).length;};
+      root.querySelectorAll(".checks input").forEach(i=>i.addEventListener("change",upd)); upd();
+      $("#rs-save").addEventListener("click",()=>saveResult(v));
+      const m=$("#rs-missed"); if(m) m.addEventListener("click",async()=>{ if(await updateVisit(v.id,{state:"missed",time:$("#rs-time").value},"سُجّلت كزيارة لم تتم")) closeSheet(); });
+      const d=$("#rs-del"); if(d) d.addEventListener("click",async()=>{ if(await removeVisit(v.id)) closeSheet(); });
+    }
+  });
+}
+async function saveResult(v){
+  const err=$("#rs-err");
+  const res=(document.querySelector('input[name="rs-res"]:checked')||{}).value;
+  const channel=(document.querySelector('input[name="rs-ch"]:checked')||{}).value||"visit";
+  const notes=$("#rs-notes").value.trim();
+  const nt=$("#rs-next").value.trim(), nd=$("#rs-nextd").value;
+  const checks={}; CHECKS.forEach(k=>checks[k[0]]=$("#rs-ck-"+k[0]).checked);
+  if(!res){ err.textContent="اختر نتيجة الزيارة."; err.hidden=false; return; }
+  if(res!=="absent" && notes.length<10){ err.textContent="اكتب ملاحظة قصيرة: ماذا يحتاج العميل وماذا اتفقتما."; err.hidden=false; $("#rs-notes").focus(); return; }
+  err.hidden=true;
+  const autoNext=$("#rs-auto").checked;
+  const btn=$("#rs-save"); btn.disabled=true;
+  const ok=await updateVisit(v.id,{state:"done",result:res,channel,notes,next_text:nt,next_date:nd||null,checks,purpose:$("#rs-purpose").value,time:$("#rs-time").value,done_at:new Date().toISOString(),done_by:S.email});
+  if(!ok){ btn.disabled=false; return; }
+  let msg = res==="order" ? "حُفظت. مبروك على الطلبية!" : "حُفظت النتيجة";
+  if(nd && autoNext && nd!==v.date && !visitFor(v.customerId,nd)){
+    const nid=await createVisit(v.customerId,nd,{purpose:"followup",from_visit:v.id});
+    if(nid) msg+=" وأُضيفت المتابعة لخطة "+dShort(nd);
+  }
+  toast(msg); closeSheet();
+}
+
+/* customer sheet */
+function openCustomer(id){
+  const draw=()=>{
+    const c=S.customers.get(id); if(!c) return null;
+    const d=S.der.get(id), lv=S.lastVisit.get(id);
+    const hist=S.visits.filter(v=>v.customerId===id).sort((a,b)=>a.date<b.date?1:-1);
+    let h='<dl class="kv">'
+      +'<dt>الحالة</dt><dd>'+chipFor(id)+(d.status==="new"?' <span class="v-sub">متبقٍ '+d.toGo+' طلبية ليصبح حالياً</span>':'')+'</dd>'
+      +'<dt>المنصب</dt><dd>'+esc(c.title||"—")+'</dd><dt>الجهة</dt><dd>'+esc(c.org||"—")+'</dd>'
+      +'<dt>المنطقة</dt><dd>'+esc(c.area||"—")+'</dd><dt>النوع</dt><dd>'+esc(c.type||"—")+'</dd>'
+      +'<dt>آخر زيارة</dt><dd>'+esc(lv?dShort(lv)+" · "+ago(lv):"لا يوجد")+'</dd>'
+      +'<dt>الطلبيات</dt><dd class="num">'+d.count+(d.lastOrder?' · آخرها '+esc(dShort(d.lastOrder)):'')+'</dd>'
+      +'<dt>الجوال</dt><dd>'+([c.phone,c.phone2].filter(Boolean).map(p=>'<div class="phone"><span>'+esc(p)+'</span><button class="btn sm ghost" data-act="copy" data-text="'+esc(p)+'">نسخ</button></div>').join("")||"—")+'</dd></dl>';
+    if(c.note) h+='<div class="v-note"><span class="k">ملاحظة عامة</span>'+esc(c.note)+'</div>';
+    if(c.phone) h+='<div class="row grow"><a class="btn" href="tel:'+esc(c.phone)+'">اتصال</a><a class="btn" href="'+esc(waLink(c.phone))+'" target="_blank" rel="noopener">واتساب</a></div>';
+    h+='<h2 class="sec">سجل الزيارات <small>'+hist.length+'</small></h2>';
+    h+= hist.length? '<div class="feed">'+hist.map(v=>visitCard(v,{showDate:true,noLink:true})).join("")+'</div>' : '<div class="empty"><b>لا توجد زيارات بعد</b>أضفه لخطة اليوم لتبدأ.</div>';
+    return h;
+  };
+  const c=S.customers.get(id); if(!c) return;
+  let label=null;
+  openSheet({
+    title: esc(cname(c)), sub: esc(c.org||""),
+    body:draw(),
+    foot:'<button class="btn primary" id="cs-plan"></button><button class="btn" data-act="edit-cust" data-id="'+esc(id)+'">تعديل البيانات</button>',
+    mount(root){
+      const b=$("#cs-plan",root);
+      label=()=>{const ex=visitFor(id,S.day); b.textContent= ex? (ex.state==="planned"?"في خطة "+dShort(S.day)+" ✓":"تمت زيارته "+dShort(S.day)) : "أضف لخطة "+(S.day===todayStr()?"اليوم":dShort(S.day)); b.disabled=!!(ex&&ex.state!=="planned");};
+      label();
+      b.addEventListener("click",async()=>{ const ex=visitFor(id,S.day); b.disabled=true; if(ex&&ex.state==="planned") await removeVisit(ex.id); else if(!ex) await createVisit(id,S.day); label(); });
+    },
+    onUpdate(){ const h=draw(); if(h==null){ closeSheet(); return; } const body=$("#sh-body"); if(body) body.innerHTML=h; if(label) label(); }
+  });
+}
+
+/* customer form */
+function openCustomerForm(id){
+  const c = id? S.customers.get(id) : {base:"new",type:"ورشة"};
+  if(!c) return;
+  const areas=[...new Set([...S.customers.values()].map(x=>x.area).filter(Boolean))];
+  const f=(k,label,attrs)=>'<div class="field"><label for="cf-'+k+'">'+label+'</label><input id="cf-'+k+'" class="input" value="'+esc(c[k]||"")+'" '+(attrs||"")+'></div>';
+  const body=f("person","اسم الشخص",'autocomplete="off"')+f("title","المنصب",'placeholder="فني صيانة، مدير الصيانة…"')+f("org","الجهة",'placeholder="اسم الورشة أو الشركة"')
+   +f("area","المنطقة",'list="cf-areas" placeholder="علي بن علي، أم الحمام…"')+'<datalist id="cf-areas">'+areas.map(a=>'<option value="'+esc(a)+'">').join("")+'</datalist>'
+   +f("phone","رقم الجوال",'inputmode="tel" dir="ltr" placeholder="05xxxxxxxx"')+f("phone2","رقم إضافي (اختياري)",'inputmode="tel" dir="ltr"')
+   +'<div class="field"><label for="cf-type">نوع الجهة</label><select id="cf-type" class="input">'+TYPES.map(t=>'<option'+(c.type===t?" selected":"")+'>'+t+'</option>').join("")+'</select></div>'
+   +'<div class="field"><label for="cf-base">الحالة الأساسية</label><select id="cf-base" class="input">'
+   +[["new","جديد"],["current","حالي"],["lapsed","سابق"]].map(o=>'<option value="'+o[0]+'"'+(c.base===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select><span class="help">تتغير الحالة تلقائياً بعد ذلك حسب الطلبيات المسجّلة.</span></div>'
+   +'<div class="field"><label for="cf-note">ملاحظة عامة</label><textarea id="cf-note" class="input" placeholder="أي معلومة ثابتة عن العميل">'+esc(c.note||"")+'</textarea></div><div class="err" id="cf-err" hidden></div>';
+  openSheet({
+    title: id? "تعديل بيانات العميل":"عميل جديد", body,
+    foot:'<button class="btn primary" id="cf-save">حفظ</button><button class="btn" data-act="close-sheet">إلغاء</button>',
+    mount(){
+      $("#cf-save").addEventListener("click",async()=>{
+        const g=k=>$("#cf-"+k).value.trim();
+        const data={person:g("person"),title:g("title"),org:g("org"),area:g("area"),phone:g("phone").replace(/\s/g,""),phone2:g("phone2").replace(/\s/g,""),type:$("#cf-type").value,note:g("note")};
+        const base=$("#cf-base").value;
+        if(!data.person && !data.org){ const e=$("#cf-err"); e.textContent="اكتب اسم الشخص أو الجهة على الأقل."; e.hidden=false; return; }
+        $("#cf-save").disabled=true;
+        let r;
+        if(id){ if(base!==c.base){data.base=base;data.since=todayStr();} r=await guard(sb.from("customers").update(data).eq("id",id).select().single(),"حُفظت التعديلات"); }
+        else r=await guard(sb.from("customers").insert(Object.assign(data,{id:uuid(),base,since:todayStr(),created_by:S.email})).select().single(),"أُضيف العميل");
+        if(r){ putCust(r); refresh(); if(id) openCustomer(id); else closeSheet(); } else $("#cf-save").disabled=false;
+      });
+    }
+  });
+}
+
+/* coach note (manager) */
+function openCoach(id){
+  const v=S.visitById.get(id); if(!v) return; const c=S.customers.get(v.customerId)||{};
+  openSheet({
+    title:"توجيه على زيارة "+esc(cname(c)), sub:esc(dLong(v.date)),
+    body:(v.notes?'<div class="v-note"><span class="k">ملاحظات الزيارة</span>'+esc(v.notes)+'</div>':'')
+      +'<div class="field"><label for="co-t">توجيهك لرجل المبيعات</label><textarea id="co-t" class="input" placeholder="ما الذي أحسن فيه؟ وما الذي يفعله بشكل مختلف في المرة القادمة؟">'+esc(v.coach&&v.coach.text||"")+'</textarea></div>',
+    foot:'<button class="btn primary" id="co-s">حفظ التوجيه</button><button class="btn" data-act="close-sheet">إلغاء</button>',
+    mount(){ $("#co-s").addEventListener("click",async()=>{ const t=$("#co-t").value.trim(); if(await updateVisit(id,{coach_text:t,coach_at:new Date().toISOString()},"حُفظ التوجيه")) closeSheet(); }); }
+  });
+}
+
+/* plan settings (manager) */
+function openSettings(){
+  const c=S.cfg;
+  const F=[["dailyTarget","الزيارات اليومية المستهدفة"],["weeklyNew","زيارات العملاء الجدد أسبوعياً"],["weeklyOrders","الطلبيات الناجحة أسبوعياً"],["monthlyConv","تحويل جدد إلى حاليين شهرياً"],["ordersToConvert","عدد الطلبيات ليصبح الجديد حالياً"],["lapsedDays","يصبح الحالي سابقاً بعد (يوم بلا طلبية)"],["planStartCount","عدد الحاليين في بداية الخطة"]];
+  openSheet({
+    title:"أهداف الخطة", sub:"تُطبّق فوراً على التطبيق عند الجميع",
+    body:F.map(f=>'<div class="field"><label for="st-'+f[0]+'">'+f[1]+'</label><input id="st-'+f[0]+'" class="input num" type="number" min="1" inputmode="numeric" value="'+esc(c[f[0]])+'"></div>').join("")
+      +'<div class="field"><label for="st-planStartMonth">شهر بداية الخطة</label><input id="st-planStartMonth" class="input" type="month" value="'+esc(c.planStartMonth)+'"></div>',
+    foot:'<button class="btn primary" id="st-s">حفظ</button><button class="btn" data-act="close-sheet">إلغاء</button>',
+    mount(){ $("#st-s").addEventListener("click",async()=>{
+      const d={}; F.forEach(f=>{const n=Number($("#st-"+f[0]).value); d[f[0]]= n>0?n:DEF[f[0]];}); d.planStartMonth=$("#st-planStartMonth").value||DEF.planStartMonth;
+      const r=await guard(sb.from("config").upsert({id:1,data:d}).select().single(),"حُفظت الأهداف");
+      if(r){ S.cfg=Object.assign({},DEF,d); refresh(); closeSheet(); }
+    }); }
+  });
+}
+
+/* ---------- global clicks ---------- */
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-act]"); if(!b) return;
+  const a=b.dataset.act, id=b.dataset.id;
+  if(a==="tab") return setTab(b.dataset.tab);
+  if(a==="close-sheet") return closeSheet();
+  if(a==="logout"){ await sb.auth.signOut(); return showLogin(); }
+  if(a==="reload") return location.reload();
+  if(a==="install"){ if(installEvt){ installEvt.prompt(); try{ await installEvt.userChoice; }catch(err){} installEvt=null; document.querySelectorAll("[data-install]").forEach(x=>x.hidden=true); } return; }
+  if(a==="day-prev"){ S.day=addDays(S.day,-1); return renderView(); }
+  if(a==="day-next"){ S.day=addDays(S.day,1); return renderView(); }
+  if(a==="day-today"){ S.day=todayStr(); return renderView(); }
+  if(a==="open-planner") return openPlanner("plan");
+  if(a==="open-log") return openPlanner("log");
+  if(a==="result") return openResult(id);
+  if(a==="cust") return openCustomer(id);
+  if(a==="new-cust") return openCustomerForm(null);
+  if(a==="edit-cust") return openCustomerForm(id);
+  if(a==="coach") return openCoach(id);
+  if(a==="settings") return openSettings();
+  if(a==="filter"){ S.filter=b.dataset.f; return updateCustomers(); }
+  if(a==="copy"){ const t=b.dataset.text; try{ await navigator.clipboard.writeText(t); toast("نُسخ الرقم "+t); }catch(err){ toast("الرقم: "+t); } }
+});
+
+/* keep "today" correct if the app stays open past midnight */
+let lastToday=todayStr();
+setInterval(()=>{ const t=todayStr(); if(t!==lastToday){ if(S.day===lastToday) S.day=t; lastToday=t; refresh(); } },60000);
+
+if("serviceWorker" in navigator) window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+boot();
+})();
+</script>
+</body>
+</html>
