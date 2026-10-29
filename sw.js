@@ -1,5 +1,5 @@
-/* Offline shell for Ø²ÙŠØ§Ø±Ø§Øª Ø¨Ø§Ø±ØªÙƒ. Data requests to Supabase always go to the network. */
-const CACHE = "ptv-v3";
+/* Offline shell for the PARTECH visits app. Data requests to Supabase always go to the network. */
+const CACHE = "ptv-v4";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
