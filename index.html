@@ -7,8 +7,8 @@
 <meta name="description" content="تخطيط وتسجيل زيارات مبيعات بارتك اليومية ومتابعتها مقابل أهداف الخطة">
 <meta name="theme-color" content="#007AFF">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Readex+Pro:wght@500;600;700&display=swap">
@@ -74,7 +74,10 @@ h2.sec small{font-family:var(--f-body);font-size:14px;color:var(--ink-3);font-we
 .install{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--accent-soft);border-radius:var(--r);padding:12px 14px;font-size:15px}
 
 /* tab bar */
-.tabs{position:fixed;bottom:0;inset-inline:0;z-index:30;background:var(--bar);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-top:.5px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabs{position:fixed;bottom:0;inset-inline:0;z-index:30;background:var(--bar);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-top:.5px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabs button{position:relative}
+.tabs .bdg{position:absolute;top:0;inset-inline-start:calc(50% + 4px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--red,#FF3B30);color:#fff;font-size:12px;font-weight:700;line-height:18px;text-align:center}
+.msgsec .pi.wa{align-items:center}
 .tabs button{appearance:none;border:0;background:none;color:var(--ink-3);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;font-size:12px;font-weight:600;cursor:pointer;transition:color .15s}
 .tabs button[aria-current="page"]{color:var(--accent)}
 .tabs svg{width:28px;height:28px}
@@ -306,6 +309,7 @@ select.input{appearance:auto}
   <nav class="tabs" aria-label="الأقسام" hidden>
     <button data-act="tab" data-tab="today" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18M9 15l2 2 4-4"/></svg>اليوم</button>
     <button data-act="tab" data-tab="customers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .7 3.2 2.5 3.5 5.2"/></svg>العملاء</button>
+    <button data-act="tab" data-tab="msgs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.5L3 20.5l1.6-5.3A8.5 8.5 0 1 1 21 11.5z"/><path d="M8.5 10h7M8.5 13.5h4.5"/></svg>الرسائل<span class="bdg" id="msg-bdg" hidden></span></button>
     <button data-act="tab" data-tab="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>المتابعة</button>
     <button data-act="tab" data-tab="guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6"/></svg>الدليل</button>
   </nav>
@@ -371,7 +375,7 @@ const FAMILY_Q = {
   fleet:"ما حجم الأسطول وأنواعه؟ ومتى الصيانة الدورية؟ ومن المسؤول عن الشراء؟"
 };
 const MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
-const TABS = ["today","customers","dash","guide"];
+const TABS = ["today","customers","msgs","dash","guide"];
 
 /* ---------- state ---------- */
 const S = {
@@ -762,7 +766,7 @@ function showLogin(msg){
   if(channel){ try{ sb.removeChannel(channel); }catch(e){} channel=null; }
   $(".tabs").hidden=true; $("#who").innerHTML=""; setLive(false);
   $("#view").innerHTML='<form class="login" id="login" novalidate>'
-    +'<img class="logo" src="icon-192.png" alt="">'
+    +'<img class="logo" src="icons/icon-192.png" alt="">'
     +'<h1>أهلاً بك في زيارات بارتك</h1><p>سجّل الدخول بالإيميل وكلمة المرور التي أعطاك إياها المدير.</p>'
     +'<div class="field"><label for="lg-email">الإيميل</label><input id="lg-email" class="input" type="email" autocomplete="username" dir="ltr" inputmode="email" required></div>'
     +'<div class="field"><label for="lg-pass">كلمة المرور</label><input id="lg-pass" class="input" type="password" autocomplete="current-password" dir="ltr" required></div>'
@@ -884,6 +888,12 @@ function renderView(){
   if(!S.loaded) return;
   document.querySelectorAll(".tabs button").forEach(b=>{ if(b.dataset.tab===S.tab) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
   const v=$("#view");
+  const bd=$("#msg-bdg"); if(bd){ const n=(dow(todayStr())===5)?0:waSuggestions(todayStr(),99).length; bd.textContent=n; bd.hidden=!n; }
+  if(S.tab==="msgs"){
+    if(S.mounted!=="msgs"){ v.innerHTML=msgsShellHTML(); S.mounted="msgs";
+      const q=$("#msg-q"); q.value=S.mq||""; q.addEventListener("input",()=>{S.mq=q.value;updateMsgs();}); }
+    updateMsgs(); return;
+  }
   if(S.tab==="guide"){ if(S.mounted!=="guide"){ v.innerHTML=guideHTML(); S.mounted="guide"; } return; }
   if(S.tab==="today"){ v.innerHTML = installHTML()+todayHTML(); S.mounted="today"; }
   else if(S.tab==="dash"){ v.innerHTML = dashHTML(); S.mounted="dash"; }
@@ -1912,12 +1922,33 @@ function waSuggestions(day,max){
   for(const c of S.customers.values()){ const s=waSituation(c); if(!s) continue; const k=facKey(c), o=best.get(k); if(!o||s.u>o.s.u) best.set(k,{c,s}); }
   return [...best.values()].sort((a,b)=>b.s.u-a.s.u).slice(0,max||4);
 }
+function waRowsHTML(items){
+  return items.map(x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b><span class="pw">'+esc(WA[x.s.kind].label)+'</span></div><button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.s.kind+'">رسالة</button></div>').join("");
+}
 function waHTML(day){
   if(day!==todayStr()||dow(day)===5) return "";
-  const items=waSuggestions(day,4); if(!items.length) return "";
-  return '<section class="card"><h3>رسائل واتساب مقترحة <small>بنقرة واحدة</small></h3><div class="prio">'
-   +items.map(x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b><span class="pw">'+esc(WA[x.s.kind].label)+'</span></div><button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.s.kind+'">رسالة</button></div>').join("")
-   +'</div></section>';
+  const all=waSuggestions(day,99); if(!all.length) return "";
+  return '<section class="card"><h3>رسائل واتساب مقترحة <small>بنقرة واحدة</small></h3><div class="prio">'+waRowsHTML(all.slice(0,2))+'</div>'
+   +'<button class="btn" data-act="tab" data-tab="msgs" style="margin-top:10px;width:100%">كل الرسائل'+(all.length>2?' ('+all.length+')':'')+'</button></section>';
+}
+/* messages tab: suggestions, message anyone, recently sent */
+const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد التسليم",quote:"متابعة تسعير",newbie:"عميل جديد",cold:"عميل بعيد",hello:"رسالة عامة"};
+function msgsShellHTML(){
+  return '<section class="card msgsec" id="msg-sug"></section>'
+   +'<section class="card msgsec"><h3>رسالة لأي عميل</h3><div class="field"><input id="msg-q" class="input" type="search" placeholder="ابحث بالاسم أو المنشأة أو الجوال" autocomplete="off"></div><div class="prio" id="msg-res"></div></section>'
+   +'<section class="card msgsec" id="msg-sent"></section>';
+}
+function updateMsgs(){
+  const day=todayStr(), fri=dow(day)===5, all=fri?[]:waSuggestions(day,99);
+  const sug=$("#msg-sug"); if(!sug) return;
+  sug.innerHTML='<h3>مقترحة اليوم'+(all.length?' <small>'+all.length+'</small>':'')+'</h3>'
+    +(all.length?'<div class="prio">'+waRowsHTML(all)+'</div>':'<div class="v-sub">'+(fri?"اليوم الجمعة: إجازة، لا رسائل.":"لا توجد رسائل مقترحة الآن. سنقترح حين يحين موعد عميل.")+'</div>');
+  const q=normName($("#msg-q").value||""), res=$("#msg-res"); let rows=[];
+  if(q){ const qd=($("#msg-q").value||"").replace(/\D/g,"");
+    for(const c of S.customers.values()){ if(normName(cname(c)+" "+(c.name||"")+" "+(c.org||"")).includes(q)||(qd.length>=3&&String(c.phone||"").replace(/\D/g,"").includes(qd))) rows.push(c); if(rows.length>=8) break; } }
+  res.innerHTML=q?(rows.length?rows.map(c=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(c))+' '+tierChip(c)+'</b><span class="pw">'+esc(lastMsg(c.id)?"آخر رسالة "+ago(lastMsg(c.id)):"لم تُرسل له رسالة")+'</span></div><button class="btn sm primary" data-act="wa" data-id="'+esc(c.id)+'">رسالة</button></div>').join(""):'<div class="v-sub">لا يوجد عميل بهذا الاسم.</div>'):'<div class="v-sub">اكتب اسم العميل لتجهيز رسالة له.</div>';
+  const cut=addDays(day,-14), sent=S.messages.filter(m=>m.date>=cut).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,15);
+  $("#msg-sent").innerHTML='<h3>أُرسلت مؤخراً <small>14 يوماً</small></h3>'+(sent.length?'<div class="prio">'+sent.map(m=>{ const c=S.customers.get(m.customerId); return '<div class="pi"><div class="pm"><b>'+esc(c?cname(c):"عميل محذوف")+'</b><span class="pw">'+esc(MSG_KIND[m.kind]||"رسالة")+' · '+esc(ago(m.date))+'</span></div></div>'; }).join("")+'</div>':'<div class="v-sub">لم تُرسل رسائل بعد.</div>');
 }
 function openWa(cid,kind){
   const c=S.customers.get(cid); if(!c) return;
