@@ -235,6 +235,53 @@ textarea.input{min-height:90px;resize:vertical;line-height:1.5}
 .kv dd{margin:0;font-weight:600;min-width:0;overflow-wrap:anywhere}
 .phone{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-variant-numeric:tabular-nums;direction:ltr;justify-content:flex-end}
 
+/* smart planning */
+.balance{display:flex;flex-direction:column;gap:6px}
+.bbar{display:flex;gap:2px;height:8px;border-radius:99px;overflow:hidden;background:var(--surface-2)}
+.bbar i{display:block;height:100%}
+.bbar .b-current{background:var(--good)}.bbar .b-lapsed{background:var(--warn)}.bbar .b-new{background:var(--new)}
+.bleg{font-size:12px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:2px 12px}
+.bwarn{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+.bwarn li{padding-inline-start:14px;position:relative;color:var(--ink-2)}
+.bwarn li::before{content:"";position:absolute;inset-inline-start:0;top:.55em;width:7px;height:7px;border-radius:50%;background:var(--ink-3)}
+.bwarn li.warn{color:var(--warn);font-weight:600}.bwarn li.warn::before{background:var(--warn)}
+.carry{display:flex;flex-direction:column;gap:10px}
+.c-why{display:block;font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.why{font-size:12px;color:var(--accent);font-weight:600}
+.star{color:var(--warn)}
+/* tiers, interest, priorities, guide, forms */
+.chip.tier{min-width:24px;justify-content:center;font-family:var(--f-display)}
+.chip.tier-A{background:var(--ink);color:var(--bg)}
+.chip.tier-B{background:var(--accent-soft);color:var(--accent)}
+.chip.tier-C{background:var(--surface-2);color:var(--ink-3)}
+.chip.int-high{background:var(--good-soft);color:var(--good)}
+.chip.int-mid{background:var(--accent-soft);color:var(--accent)}
+.chip.int-cooling{background:var(--warn-soft);color:var(--warn)}
+.chip.int-low{background:var(--bad-soft);color:var(--bad)}
+.prio{display:flex;flex-direction:column;gap:10px}
+.prio .pi{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:var(--surface-2);border-radius:12px;border-inline-start:4px solid var(--warn)}
+.prio .pi .pm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.prio .pi b{font-size:15px}
+.prio .pi .pw{font-size:13px;color:var(--ink-2)}
+.warnrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.bad{border-color:var(--bad)!important;background:var(--bad-soft)}
+.axes{display:flex;flex-direction:column;gap:6px}
+.axis{display:grid;grid-template-columns:86px 1fr 34px;gap:8px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.axis .bar{height:6px}
+.axis em{font-style:normal;text-align:end;font-variant-numeric:tabular-nums;color:var(--ink-3)}
+.gstep{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.gstep b{display:block;margin-bottom:3px;font-size:14px}
+.gstep ul{margin:0;padding-inline-start:18px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.people-pick{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border-radius:12px;padding:8px}
+.pp{display:flex;flex-direction:column;gap:6px;padding:6px;border-radius:10px;background:var(--surface)}
+.pp .pph{display:flex;align-items:center;gap:8px;font-size:14px}
+.pp .pph input{width:20px;height:20px;accent-color:var(--accent)}
+.sub-h{font-size:12px;font-weight:700;color:var(--ink-3);margin:0}
+select.input{appearance:auto}
+.ord{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:var(--surface-2);border-radius:10px;font-size:13.5px}
+.ord .num{font-weight:600}
+.issue{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid var(--line);font-size:14px}
+.issue small{display:block;color:var(--bad);font-size:12px}
 #toast{position:fixed;inset-inline:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:60;display:flex;justify-content:center;pointer-events:none}
 #toast div{background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:var(--shadow);max-width:520px}
 @media (prefers-reduced-motion: no-preference){
@@ -272,20 +319,52 @@ const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
 "use strict";
 
 /* ---------- constants ---------- */
-const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10};
+const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:5000, activityGood:12, marginGood:20};
 const ST = {current:"حالي", lapsed:"سابق", new:"جديد"};
 const PURPOSE = {order:"أخذ طلبية", intro:"تعريف ببارتك", followup:"متابعة", recover:"استرجاع العميل", collect:"تحصيل / تسليم"};
 const RESULT = {order:"طلبية ✓", interested:"مهتم - يحتاج متابعة", notnow:"غير مهتم حالياً", absent:"لم يتواجد"};
 const CHANNEL = {visit:"زيارة ميدانية", call:"اتصال"};
 const TYPES = ["ورشة","مركز صيانة","مكتب تأجير","شركة صيانة","أخرى"];
-const CHECKS = [
-  ["goal","حددت هدف الزيارة قبل أن أبدأ"],
-  ["need","سألت العميل عن احتياجه الحالي (السيارات والقطع هذا الأسبوع)"],
-  ["value","ربطت بارتك باحتياجه: السرعة، توفر القطعة، السعر"],
-  ["ask","طلبت الطلبية بشكل صريح"],
-  ["next","اتفقنا على خطوة قادمة بموعد محدد"],
-  ["dm","أعرف صاحب قرار الشراء ورقمه"]
+/* facility types: [name, base capacity 1-5, family] */
+const FTYPES = [
+  ["ورشة صغيرة",1,"workshop"],["ورشة متوسطة / مركز صيانة",2,"workshop"],["شركة صيانة بفروع",4,"maint"],
+  ["مكتب تأجير صغير",2,"rental"],["شركة تأجير كبيرة بفروع",5,"rental"],["شركة بأسطول صغير",3,"fleet"],["شركة بأسطول كبير",5,"fleet"],["أخرى",1,"workshop"]
 ];
+const FT = new Map(FTYPES.map(t=>[t[0],t]));
+const LEGACY_FT = {"ورشة":"ورشة صغيرة","مركز صيانة":"ورشة متوسطة / مركز صيانة","مكتب تأجير":"مكتب تأجير صغير","شركة صيانة":"شركة صيانة بفروع","أخرى":"أخرى"};
+const WEIGHTS = {value:.30, margin:.20, activity:.20, cap:.15, interest:.15};
+const GOAL_MET = {yes:"تحقق", part:"تحقق جزئياً", no:"لم يتحقق"};
+const REASONS = ["السعر مرتفع","لديه مورد ثابت","لا يحتاج حالياً","تأخير سابق في التسليم","مشكلة جودة","ليس صاحب قرار الشراء","أخرى"];
+const LEVEL = {high:"اهتمام مرتفع",mid:"اهتمام متوسط",cooling:"اهتمامه يبرد",low:"اهتمام ضعيف"};
+/* the adaptive visit guide: goals, the checklist and the talking points all depend on the customer's stage */
+const STAGES = {
+  new0:{label:"عميل جديد · لم يطلب بعد",
+    goals:["أول طلبية تجريبية صغيرة","التعرف على صاحب قرار الشراء","تعريفه ببارتك وأخذ احتياجه"],
+    checks:[["intro","عرّفته ببارتك: كيف نعمل وماذا نوفر"],["need","عرفت احتياجه الحالي (السيارات والقطع)"],["trial","عرضت طلبية تجربة صغيرة"],["dm","تعرفت على صاحب قرار الشراء ورقمه"],["next","اتفقنا على خطوة قادمة بموعد"]],
+    steps:[["قبل الدخول",["هدفك طلبية تجربة صغيرة، لا عرضاً شاملاً.","اعرف اسم صاحب القرار إن أمكن."]],["ابدأ بالأسئلة",["«وش السيارات اللي عندكم هالأسبوع؟»","«فيه قطع تأخرت عليكم أو صعب تلقونها؟»","«مين المسؤول عن الشراء؟»"]],["اعرض",["السرعة وتوفر القطعة والمتابعة الشخصية.","طلبية تجربة بقطعة واحدة أو قطعتين."]],["أغلق",["«خلني أسجل لك الطلبية الحين وتوصلك اليوم.»","حدد موعد الزيارة القادمة قبل أن تخرج."]]]},
+  new1:{label:"عميل جديد · طلب مرة",
+    goals:["الطلبية الثانية","تأكيد رضاه عن الطلبية الأولى","التعرف على أصناف أخرى يحتاجها"],
+    checks:[["sat","تأكدت من رضاه عن الطلبية السابقة"],["repeat","اقترحت طلبية متكررة أو ثابتة"],["need","عرفت أصنافاً أخرى يحتاجها"],["ask","طلبت الطلبية صراحة"],["next","اتفقنا على خطوة قادمة بموعد"]],
+    steps:[["قبل الدخول",["راجع الطلبية السابقة: هل وصلت في وقتها؟","ابدأ بسؤاله عنها."]],["ابدأ بالأسئلة",["«كيف كانت القطع والتسليم؟»","«وش اللي تحتاجه غيرها؟»"]],["اعرض",["طلبية متكررة بنفس الصنف.","أصناف تكمل احتياجه."]],["أغلق",["اطلب الطلبية الثانية الآن.","اذكر أن الطلبية الثالثة تثبّته كعميل حالي."]]]},
+  new2:{label:"عميل جديد · طلبيتان من ثلاث",
+    goals:["الطلبية الثالثة لتثبيته عميلاً حالياً","تحويل طلبه إلى طلب أسبوعي ثابت"],
+    checks:[["sat","تأكدت من رضاه عن آخر طلبية"],["repeat","اتفقنا على إيقاع شراء ثابت"],["ask","طلبت الطلبية الثالثة صراحة"],["dm","أكدت صاحب القرار ورقمه"],["next","اتفقنا على خطوة قادمة بموعد"]],
+    steps:[["قبل الدخول",["أنت على بعد طلبية واحدة من تثبيته.","جهّز عرضاً لطلب أسبوعي ثابت."]],["ابدأ بالأسئلة",["«كم تحتاج منها أسبوعياً تقريباً؟»","«فيه شيء يعطّل تثبيت التعامل معنا؟»"]],["أغلق",["اطلب الطلبية الآن واتفقا على يوم ثابت للطلب."]]]},
+  current:{label:"عميل حالي",
+    goals:["طلبية هذا الأسبوع","زيادة حجم الطلبية أو إضافة صنف","مراجعة رضاه وحل أي مشكلة","تحصيل أو تسليم"],
+    checks:[["review","راجعت احتياجه المتكرر هذا الأسبوع"],["sat","سألت عن أي مشكلة أو تأخير"],["upsell","عرضت صنفاً جديداً أو زيادة"],["ask","طلبت الطلبية صراحة"],["next","اتفقنا على خطوة قادمة بموعد"]],
+    steps:[["قبل الدخول",["اقرأ آخر ملاحظة وآخر طلبية.","هدفك طلبية الأسبوع، والعميل الحالي أغلى خسارة."]],["ابدأ بالأسئلة",["«وش تحتاج هالأسبوع؟»","«فيه قطعة أو تسليم ضايقك؟»"]],["اعرض",["صنفاً جديداً مناسباً لسياراته.","طلبية ثابتة تقلل عليه الاتصال."]],["أغلق",["سجل الطلبية قبل أن تخرج.","حدد موعد الأسبوع القادم."]]]},
+  lapsed:{label:"عميل سابق · للاسترجاع",
+    goals:["معرفة سبب التوقف","طلبية تجربة لإعادته","تقديم حل لمشكلته السابقة"],
+    checks:[["why","عرفت سبب توقفه"],["fix","عرضت حلاً للسبب"],["trial","عرضت طلبية تجربة صغيرة"],["ask","طلبت الطلبية صراحة"],["next","اتفقنا على خطوة قادمة بموعد"]],
+    steps:[["قبل الدخول",["لا تدافع عن بارتك قبل أن تسمع.","اعرف متى كانت آخر طلبية ولماذا قد يكون توقف."]],["ابدأ بالأسئلة",["«لاحظنا إنك توقفت عنا، وش السبب؟»","«وش اللي لازم يتغير عشان نرجع نشتغل؟»"]],["اعرض",["حلاً مباشراً للسبب الذي ذكره.","طلبية تجربة صغيرة وتتابعها بنفسك."]],["أغلق",["اتفقا على الطلبية التجريبية وموعدها."]]]}
+};
+const FAMILY_Q = {
+  workshop:"كم سيارة تدخل الورشة أسبوعياً؟ وما أكثر القطع طلباً؟",
+  maint:"كم فرعاً عندهم؟ ومن يعتمد الشراء؟ وهل يوجد مورد معتمد أو اعتماد أسعار؟",
+  rental:"كم سيارة في الأسطول؟ وما الماركات ودورة الصيانة؟",
+  fleet:"ما حجم الأسطول وأنواعه؟ ومتى الصيانة الدورية؟ ومن المسؤول عن الشراء؟"
+};
 const MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 const TABS = ["today","customers","dash","guide"];
 
@@ -294,6 +373,7 @@ const S = {
   email:null, me:null, team:new Map(), isOwner:false,
   customers:new Map(), visits:[], visitById:new Map(), cfg:{...DEF},
   der:new Map(), lastVisit:new Map(),
+  facilities:new Map(), orders:[], costs:new Map(), facM:new Map(), facPeople:new Map(), events:[],
   loaded:false, tab:"today", mounted:null,
   day:todayStr(), filter:"all", q:"", sheet:null
 };
@@ -327,7 +407,11 @@ function ago(s){
 }
 function waLink(p){const d=String(p||"").replace(/\D/g,"");if(!d) return "";return "https://wa.me/"+(d.startsWith("0")?"966"+d.slice(1):d);}
 function initials(c){const n=(c.person&&c.person!=="—"?c.person:c.org)||"؟";return n.replace(/^(م\.|ابو|أبو)\s*/,"").trim().charAt(0)||"؟";}
-function cname(c){return c? (c.person&&c.person!=="—"? c.person : (c.title||"بدون اسم")) : "عميل محذوف";}
+function cname(c){return c? (c.important?"★ ":"")+(c.person&&c.person!=="—"? c.person : (c.title||"بدون اسم")) : "عميل محذوف";}
+/* Arabic number agreement: forms = [one, two, 3-10, 11+] (the number is included except for "one") */
+function plural(n,f){ return n===1?f[0]:n===2?f[1]:n+" "+(n<=10?f[2]:f[3]); }
+const P_VISIT=["زيارة واحدة","زيارتان","زيارات","زيارة"], P_DAY=["يوم واحد","يومان","أيام","يوماً"], P_CUR=["عميل حالي واحد","عميلان حاليان","عملاء حاليين","عميلاً حالياً"];
+function shorten(s,n){s=String(s||"");return s.length>n?s.slice(0,n-1)+"…":s;}
 function pct(a,b){return b>0?Math.min(100,Math.round(a/b*100)):0;}
 function teamName(email){ if(!email) return "من جدول الإكسل"; const t=S.team.get(String(email).toLowerCase()); return (t&&t.name)||String(email).split("@")[0]; }
 const ICON = {
@@ -337,7 +421,8 @@ const ICON = {
   next:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
   close:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   out:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M9 8l-4 4 4 4M5 12h10"/></svg>',
-  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>'
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
+  spark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg>'
 };
 
 /* ---------- toast ---------- */
@@ -361,8 +446,13 @@ async function guard(q, okMsg){
 }
 
 /* ---------- row mapping ---------- */
-function rowToCust(r){return {id:r.id, person:r.person||"", title:r.title||"", org:r.org||"", area:r.area||"", phone:r.phone||"", phone2:r.phone2||"", type:r.type||"", base:r.base||"new", since:r.since||"", lastVisit:r.last_visit||"", note:r.note||""};}
-function rowToVisit(r){return {id:r.id, customerId:r.customer_id, date:r.date, time:r.time||"", kind:r.kind||"", purpose:r.purpose||"", state:r.state, result:r.result||"", channel:r.channel||"visit", notes:r.notes||"", next:{text:r.next_text||"", date:r.next_date||""}, checks:r.checks||{}, coach:{text:r.coach_text||"", at:r.coach_at}, by:r.by_email, doneBy:r.done_by, doneAt:r.done_at||"", createdAt:r.created_at||"", unplanned:!!r.unplanned};}
+function rowToCust(r){return {id:r.id, person:r.person||"", title:r.title||"", org:r.org||"", area:r.area||"", phone:r.phone||"", phone2:r.phone2||"", type:r.type||"", base:r.base||"new", since:r.since||"", lastVisit:r.last_visit||"", note:r.note||"", important:!!r.important, facilityId:r.facility_id||null};}
+function rowToVisit(r){return {id:r.id, customerId:r.customer_id, date:r.date, time:r.time||"", kind:r.kind||"", purpose:r.purpose||"", state:r.state, result:r.result||"", channel:r.channel||"visit", notes:r.notes||"", next:{text:r.next_text||"", date:r.next_date||""}, checks:r.checks||{}, coach:{text:r.coach_text||"", at:r.coach_at}, by:r.by_email, doneBy:r.done_by, doneAt:r.done_at||"", createdAt:r.created_at||"", unplanned:!!r.unplanned, goal:r.goal||"", goalMet:r.goal_met||"", reason:r.reason||"", people:Array.isArray(r.people)?r.people:[]};}
+function rowToFac(r){return {id:r.id, name:r.name||"", type:r.type||"أخرى", area:r.area||"", location:r.location||"", branches:r.branches==null?1:Number(r.branches), fleet:Number(r.fleet||0), note:r.note||"", marginScore:r.margin_score==null?null:Number(r.margin_score)};}
+function rowToOrder(r){return {id:r.id, visitId:r.visit_id||null, customerId:r.customer_id||null, facilityId:r.facility_id||null, date:r.date, orderNo:r.order_no||"", value:r.value==null?null:Number(r.value), status:r.status||"confirmed", source:r.source||"manual"};}
+function putFac(r){ S.facilities.set(r.id,rowToFac(r)); }
+function putOrder(r){ const o=rowToOrder(r); const i=S.orders.findIndex(x=>x.id===o.id); if(i>=0) S.orders[i]=o; else S.orders.push(o); }
+function dropOrder(id){ S.orders=S.orders.filter(x=>x.id!==id); S.costs.delete(id); }
 function putVisit(r){ const v=rowToVisit(r); const i=S.visits.findIndex(x=>x.id===v.id); if(i>=0) S.visits[i]=v; else S.visits.push(v); S.visitById.set(v.id,v); }
 function dropVisit(id){ S.visits=S.visits.filter(x=>x.id!==id); S.visitById.delete(id); }
 function putCust(r){ S.customers.set(r.id,rowToCust(r)); }
@@ -386,14 +476,99 @@ function derive(c, today, cfg, od){
   else status = (!ref || diff(ref,today)>=L) ? "lapsed" : "current";
   return {status, count:od.length, lastOrder:od.length?od[od.length-1]:null, convertedOn, recovered, toGo:Math.max(0,N-od.length)};
 }
+/* every order, from the orders table, plus legacy "order" visits that have no orders row */
+function buildEvents(){
+  const ev=[], has=new Set();
+  for(const o of S.orders){ if(o.status==="cancelled"||!o.customerId) continue; ev.push({cid:o.customerId,date:o.date,value:o.value||0,oid:o.id}); if(o.visitId) has.add(o.visitId+"|"+o.customerId); }
+  for(const v of S.visits){
+    if(v.state!=="done") continue;
+    if(v.result==="order" && !has.has(v.id+"|"+v.customerId)) ev.push({cid:v.customerId,date:v.date,value:0,legacy:true});
+    for(const p of v.people||[]) if(p.result==="order" && !has.has(v.id+"|"+p.id)) ev.push({cid:p.id,date:v.date,value:0,legacy:true});
+  }
+  return ev;
+}
 function recompute(){
   const t=todayStr(), ob=new Map();
-  for(const v of S.visits) if(v.state==="done"&&v.result==="order"){ if(!ob.has(v.customerId)) ob.set(v.customerId,[]); ob.get(v.customerId).push(v.date); }
+  S.events=buildEvents();
+  for(const e of S.events){ if(!ob.has(e.cid)) ob.set(e.cid,[]); ob.get(e.cid).push(e.date); }
   S.der = new Map();
   for(const c of S.customers.values()) S.der.set(c.id, derive(c,t,S.cfg,(ob.get(c.id)||[]).sort()));
   S.lastVisit = new Map();
   for(const c of S.customers.values()) if(c.lastVisit) S.lastVisit.set(c.id,c.lastVisit);
-  for(const v of S.visits){ if(v.state!=="done") continue; const cur=S.lastVisit.get(v.customerId); if(!cur||v.date>cur) S.lastVisit.set(v.customerId,v.date); }
+  const bump=(id,d)=>{ const cur=S.lastVisit.get(id); if(!cur||d>cur) S.lastVisit.set(id,d); };
+  for(const v of S.visits){ if(v.state!=="done") continue; bump(v.customerId,v.date); for(const p of v.people||[]) bump(p.id,v.date); }
+  computeFacilities();
+}
+
+/* ---------- facilities, account tier, interest ---------- */
+function clamp(x){return Math.max(0,Math.min(100,x));}
+function median(a){const s=a.slice().sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+function ftName(t){return FT.has(t)?t:(LEGACY_FT[t]||"أخرى");}
+function facKey(c){return c.facilityId||("solo:"+c.id);}
+function facOf(c){ const f=c.facilityId&&S.facilities.get(c.facilityId); return f||{id:null,name:c.org||c.person||"",type:ftName(c.type),area:c.area||"",location:"",branches:1,fleet:0,note:"",marginScore:null}; }
+function capOf(f){ const t=FT.get(ftName(f.type))||FT.get("أخرى"); let c=t[1]; if(f.branches>=3) c+=1; if(f.fleet>=100) c+=1; return Math.min(5,c); }
+function famOf(f){ return (FT.get(ftName(f.type))||FT.get("أخرى"))[2]; }
+function resFor(v,k,keyOf){ if(keyOf.get(v.customerId)===k) return v.result; const p=(v.people||[]).find(x=>keyOf.get(x.id)===k); return p?p.result:v.result; }
+function computeFacilities(){
+  const t=todayStr(), t90=addDays(t,-90), cfg=S.cfg;
+  const people=new Map(), keyOf=new Map(), evBy=new Map(), visBy=new Map();
+  for(const c of S.customers.values()){ const k=facKey(c); keyOf.set(c.id,k); if(!people.has(k)) people.set(k,[]); people.get(k).push(c); }
+  S.facPeople=people;
+  for(const e of S.events){ const k=keyOf.get(e.cid); if(!k) continue; if(!evBy.has(k)) evBy.set(k,[]); evBy.get(k).push(e); }
+  for(const v of S.visits){
+    if(v.state!=="done") continue;
+    const ks=new Set(); const k0=keyOf.get(v.customerId); if(k0) ks.add(k0);
+    for(const p of v.people||[]){ const k=keyOf.get(p.id); if(k) ks.add(k); }
+    for(const k of ks){ if(!visBy.has(k)) visBy.set(k,[]); visBy.get(k).push(v); }
+  }
+  const RW={order:1,interested:.6,notnow:-.8,absent:-.15}, rank={A:3,B:2,C:1};
+  S.facM=new Map();
+  for(const [k,ppl] of people){
+    const f=facOf(ppl[0]), evs=evBy.get(k)||[], vis=visBy.get(k)||[];
+    const ev90=evs.filter(e=>e.date>t90), val90=ev90.reduce((s,e)=>s+(e.value||0),0);
+    const valueS=evs.some(e=>e.value>0)?clamp(val90/3/cfg.valueGood*100):null;
+    const actS=clamp(ev90.length/cfg.activityGood*100);
+    const cap=capOf(f), capS=cap/5*100;
+    const dates=[...new Set(evs.map(e=>e.date))].sort();
+    const last=dates.length?dates[dates.length-1]:null, dso=last?diff(last,t):null;
+    let gap=null, ratio=null;
+    if(dates.length>=3){ const gs=[]; for(let i=1;i<dates.length;i++) gs.push(diff(dates[i-1],dates[i])); gap=Math.max(3,Math.round(median(gs))); ratio=dso/gap; }
+    let num=0, den=0;
+    for(const v of vis){ const age=diff(v.date,t); if(age>90) continue; const r=resFor(v,k,keyOf); if(!(r in RW)) continue; const w=Math.pow(.5,age/21); num+=RW[r]*w; den+=w; }
+    let score=den?50+50*num/den:(evs.length?50:null);
+    if(score!=null){
+      if(ratio!=null){ if(ratio>2.5) score-=35; else if(ratio>1.6) score-=20; else if(ratio>1.2) score-=8; else if(ratio<=1) score+=8; }
+      else if(dso!=null && dso>cfg.lapsedDays*0.75) score-=15;
+      score=clamp(score);
+    }
+    const level=score==null?null:score>=70?"high":score>=45?"mid":score>=25?"cooling":"low";
+    const fading=(ratio!=null&&ratio>1.3)||((level==="cooling"||level==="low")&&evs.length>0);
+    const axes={value:valueS,margin:f.marginScore,activity:actS,cap:capS,interest:score};
+    const wavg=keys=>{ let s=0,w=0; for(const q of keys) if(axes[q]!=null){ s+=axes[q]*WEIGHTS[q]; w+=WEIGHTS[q]; } return w?s/w:0; };
+    const perf=wavg(["value","margin","activity","interest"]), comp=wavg(["value","margin","activity","cap","interest"]);
+    const perfTier=perf>=65?"A":perf>=38?"B":"C", capTier=cap>=4?"A":cap>=2?"B":"C";
+    const tier=rank[perfTier]>=rank[capTier]?perfTier:capTier;
+    S.facM.set(k,{key:k,fac:f,people:ppl,tier,perfTier,capTier,comp,perf,axes,cap,score,level,fading,gap,dso,last,orders90:ev90.length,monthly:val90/3,evCount:evs.length});
+  }
+}
+function fmOf(c){ return c?S.facM.get(facKey(c))||null:null; }
+function tierChip(c){ const m=fmOf(c); return m?'<span class="chip tier tier-'+m.tier+'" title="فئة العميل حسب حجم المنشأة ونشاطها وقيمة طلباتها">'+m.tier+'</span>':""; }
+function intChip(c){ const m=fmOf(c); return m&&m.level?'<span class="chip int-'+m.level+'">'+LEVEL[m.level]+'</span>':""; }
+function stageOf(cid){ const d=S.der.get(cid)||{status:"new",count:0}; if(d.status==="current") return "current"; if(d.status==="lapsed") return "lapsed"; return d.count>=2?"new2":d.count===1?"new1":"new0"; }
+function defaultGoal(cid){ return STAGES[stageOf(cid)].goals[0]; }
+/* Saudi mobile numbers: accept Arabic digits, +966 / 00966, and a missing leading zero */
+function normPhone(p){ let d=String(p||"").replace(/[٠-٩]/g,x=>"٠١٢٣٤٥٦٧٨٩".indexOf(x)).replace(/[^\d+]/g,""); d=d.replace(/^(\+|00)?966/,"0"); if(/^5\d{8}$/.test(d)) d="0"+d; return d; }
+function phoneOk(p){ return /^05\d{8}$/.test(p); }
+function normName(s){ return String(s||"").replace(/[ً-ٟـ]/g,"").replace(/[أإآ]/g,"ا").replace(/ة/g,"ه").replace(/ى/g,"ي").replace(/\s+/g," ").trim().toLowerCase(); }
+/* what is missing in a customer record (used by the forms and the data-quality screen) */
+function custIssues(c){
+  const f=facOf(c), out=[];
+  if(!c.person||c.person==="—") out.push("اسم الشخص");
+  if(!c.title) out.push("المنصب");
+  if(!f.name) out.push("اسم المنشأة");
+  if(!(f.area||c.area)) out.push("المنطقة");
+  if(!phoneOk(normPhone(c.phone))) out.push("رقم جوال صحيح");
+  return out;
 }
 function stOf(id){const d=S.der.get(id);return d?d.status:"new";}
 function chipFor(id){
@@ -409,7 +584,7 @@ function visitFor(cid, day){return S.visits.find(v=>v.customerId===cid && v.date
 function defaultPurpose(cid){const d=S.der.get(cid)||{status:"new",count:0};return d.status==="current"?"order":d.status==="lapsed"?"recover":(d.count>0?"followup":"intro");}
 
 async function createVisit(cid, day, extra){
-  const row = Object.assign({id:uuid(), customer_id:cid, date:day, time:"", kind:stOf(cid), purpose:defaultPurpose(cid), state:"planned", by_email:S.email}, extra||{});
+  const row = Object.assign({id:uuid(), customer_id:cid, date:day, time:"", kind:stOf(cid), purpose:defaultPurpose(cid), goal:defaultGoal(cid), state:"planned", by_email:S.email}, extra||{});
   const r = await guard(sb.from("visits").insert(row).select().single());
   if(r){ putVisit(r); refresh(); return r.id; }
   return null;
@@ -425,6 +600,143 @@ async function removeVisit(id){
   const r = await guard(sb.from("visits").delete().eq("id",id), "أُزيلت من الخطة");
   if(r){ dropVisit(id); refresh(); }
   return !!r;
+}
+
+/* ---------- smart planning ---------- */
+function weekInfo(day){const ws=weekStart(day);return {ws,we:addDays(ws,6)};}
+function workDaysLeft(day){let n=0;const we=weekInfo(day).we;for(let d=day;d<=we;d=addDays(d,1)) if(dow(d)!==5) n++;return Math.max(1,n);}
+function planCtx(day){
+  const {ws,we}=weekInfo(day);
+  const visitedWeek=new Set(), carry=new Map(), follow=new Map(), latest=new Map();
+  for(const v of S.visits){
+    if(v.state==="done"){
+      if(v.date>=ws&&v.date<=we&&v.date!==day) visitedWeek.add(v.customerId);
+      const o=latest.get(v.customerId); if(!o||v.date>o.date) latest.set(v.customerId,v);
+    } else if(v.state==="planned" && v.date<day && diff(v.date,day)<=21){
+      const o=carry.get(v.customerId); if(!o||v.date>o.date) carry.set(v.customerId,v);
+    }
+  }
+  for(const v of latest.values()){
+    if(v.next&&v.next.date&&v.next.date<=day && !S.visits.some(x=>x.customerId===v.customerId&&x.date>v.date&&x.state!=="missed")) follow.set(v.customerId,v);
+  }
+  return {ws,we,visitedWeek,carry,follow};
+}
+/* priority score and a one-line reason for each customer */
+function scoreCustomer(c, day, ctx){
+  const s=stOf(c.id), d=S.der.get(c.id)||{count:0,lastOrder:null};
+  const lv=S.lastVisit.get(c.id)||"";
+  const since=lv?Math.max(0,diff(lv,day)):99;
+  const cv=ctx.carry.get(c.id), fv=ctx.follow.get(c.id);
+  let score=0, reason="", kind=s;
+  if(cv){ score=100; kind="carry"; reason="مرحّلة من "+dShort(cv.date); }
+  else if(fv){ score=95; kind="follow"; reason="متابعة مستحقة"+(fv.next.text?": "+shorten(fv.next.text,28):""); }
+  else if(s==="current"){
+    if(ctx.visitedWeek.has(c.id)){ score=20+Math.min(since,14); kind="current-done"; reason="زُير هذا الأسبوع"; }
+    else { score=60+Math.min(since,14)*2; reason=lv?"لم يُزر منذ "+since+" يوماً":"لم يُزر بعد"; }
+  } else if(s==="lapsed"){
+    const lo=d.lastOrder, ld=lo?Math.max(0,diff(lo,day)):0;
+    score=35+(lo?Math.max(0,15-Math.floor(Math.max(0,ld-S.cfg.lapsedDays)/6)):8);
+    reason=lo?"آخر طلبية قبل "+ld+" يوماً":"سابق للاسترجاع";
+    if(lv&&since<7) reason+=" · زُير قبل "+since+" أيام";
+    if(lv&&since<4) score-=20;
+  } else {
+    score=40+d.count*12;
+    reason=d.count>0?"جديد · "+d.count+"/"+S.cfg.ordersToConvert+" طلبيات":(lv?"جديد · لم يطلب بعد":"جديد · لم يُزر");
+    if(d.count===0&&lv&&since<3) score-=20;
+  }
+  score+=Math.min(d.count,10)*0.5;
+  if(c.important){ score+=30; reason="عميل مهم · "+reason; }
+  if(!cv&&!fv&&lv&&since<=1) score-=30;
+  const fm=fmOf(c);
+  if(fm){
+    if(fm.tier==="A") score+=14; else if(fm.tier==="B") score+=6;
+    if(fm.fading && fm.tier!=="C" && !cv && !fv){ score+=18; reason="⚠ اهتمامه يبرد · "+reason; }
+    if(fm.tier==="A") reason="فئة A · "+reason;
+  }
+  return {score,reason,kind,carryVisit:cv||null,followVisit:fv||null};
+}
+function candidates(day){
+  const ctx=planCtx(day), out=[], planned=new Set();
+  for(const v of S.visits) if(v.date===day&&v.state!=="missed"){ const c=S.customers.get(v.customerId); if(c) planned.add(facKey(c)); }
+  for(const c of S.customers.values()){
+    if(visitFor(c.id,day)) continue;
+    if(c.facilityId && planned.has(facKey(c))) continue; /* one visit per facility per day */
+    out.push(Object.assign({id:c.id,c,fk:facKey(c),area:c.area||""},scoreCustomer(c,day,ctx)));
+  }
+  return out;
+}
+/* picks the day's visits: carry-overs, due follow-ups, new-customer quota, weekly current visits, lapsed, then best score;
+   groups the result by area so the route is short */
+function suggestPlan(day, areaPref){
+  const cfg=S.cfg, inPlan=visitsOn(day).filter(v=>v.state!=="missed");
+  const slots=Math.max(0,cfg.dailyTarget-inPlan.length);
+  const cands=candidates(day), desc=(a,b)=>b.adj-a.adj;
+  cands.forEach(x=>x.adj=x.score);
+  let area=areaPref||"";
+  if(!area){
+    const sum=new Map(); cands.slice().sort((a,b)=>b.score-a.score).slice(0,Math.max(slots*2,12)).forEach(x=>{if(x.area) sum.set(x.area,(sum.get(x.area)||0)+x.score);});
+    let best=0; sum.forEach((v,k)=>{if(v>best){best=v;area=k;}});
+  }
+  cands.forEach(x=>{ if(x.area) x.adj+= x.area===area ? (areaPref?30:12) : (areaPref?-25:0); });
+  const pick=[], used=new Set(), usedF=new Set();
+  const take=(arr,n)=>{for(const x of arr){ if(pick.length>=slots||n<=0) break; if(used.has(x.id)||(x.c.facilityId&&usedF.has(x.fk))) continue; pick.push(x); used.add(x.id); usedF.add(x.fk); n--; }};
+  const by=k=>cands.filter(x=>x.kind===k).sort(desc);
+  const left=workDaysLeft(day), {ws,we}=weekInfo(day);
+  const weekNew=S.visits.filter(v=>(v.kind||stOf(v.customerId))==="new"&&v.date>=ws&&v.date<=we&&v.state!=="missed").length;
+  const newToday=Math.ceil(Math.max(0,cfg.weeklyNew-weekNew)/left);
+  const curDue=by("current");
+  const nOf=st=>pick.filter(x=>stOf(x.id)===st).length;
+  take(by("carry"),99); take(by("follow"),99);
+  take(by("new"),newToday);
+  take(curDue,Math.max(0,Math.min(Math.ceil(curDue.length/left),Math.ceil(slots*0.6)-nOf("current"))));
+  take(by("lapsed"),Math.max(0,Math.max(2,Math.ceil(slots*0.3))-nOf("lapsed")));
+  /* fill the rest by score, without letting one type take more than 70% of the day; relax if nothing else is left */
+  const cap=Math.ceil(slots*0.7);
+  take(cands.filter(x=>!used.has(x.id)&&nOf(stOf(x.id))<cap).sort(desc),99);
+  take(cands.filter(x=>!used.has(x.id)).sort(desc),99);
+  const counts=new Map(); pick.forEach(x=>{ if(x.area) counts.set(x.area,(counts.get(x.area)||0)+1); });
+  const rank=a=>!a?9999:a===area?-1000:-(counts.get(a)||0);
+  pick.sort((a,b)=>{const ra=rank(a.area),rb=rank(b.area); return ra!==rb?ra-rb:(a.area||"").localeCompare(b.area||"")||desc(a,b);});
+  return {picks:pick,area,slots,inPlan:inPlan.length};
+}
+async function addPlanned(day, picks){
+  const now=Date.now();
+  const rows=picks.map((p,i)=>({id:uuid(),customer_id:p.id,date:day,time:"",kind:stOf(p.id),
+    purpose:p.kind==="follow"?"followup":p.kind==="carry"?(p.carryVisit.purpose||"order"):defaultPurpose(p.id),
+    goal:p.kind==="carry"&&p.carryVisit.goal?p.carryVisit.goal:defaultGoal(p.id),
+    state:"planned",by_email:S.email,created_at:new Date(now+i).toISOString(),
+    from_visit:p.kind==="carry"?p.carryVisit.id:p.kind==="follow"?p.followVisit.id:null}));
+  if(!rows.length) return 0;
+  const ins=await guard(sb.from("visits").insert(rows).select());
+  if(!ins) return 0;
+  ins.forEach(putVisit);
+  const oldIds=picks.filter(p=>p.kind==="carry").map(p=>p.carryVisit.id);
+  if(oldIds.length){ const up=await guard(sb.from("visits").update({state:"missed"}).in("id",oldIds).select()); if(up&&up.forEach) up.forEach(putVisit); }
+  refresh();
+  return ins.length;
+}
+function carryItems(day){
+  const ctx=planCtx(day), out=[];
+  for(const [cid,v] of ctx.carry){ if(visitFor(cid,day)) continue; const c=S.customers.get(cid); if(c) out.push({id:cid,kind:"carry",carryVisit:v,c}); }
+  return out;
+}
+/* plan composition: mix of current / lapsed / new and warnings against the weekly targets */
+function balanceHTML(ids, day){
+  const cfg=S.cfg, n=ids.length, cnt={current:0,lapsed:0,new:0};
+  ids.forEach(id=>{const k=stOf(id); if(cnt[k]!=null) cnt[k]++;});
+  const ctx=planCtx(day), left=workDaysLeft(day), inSet=new Set(ids), w=[];
+  const weekNew=S.visits.filter(v=>(v.kind||stOf(v.customerId))==="new"&&v.date>=ctx.ws&&v.date<=ctx.we&&v.date!==day&&v.state!=="missed").length+cnt.new;
+  const needNew=cfg.weeklyNew-weekNew;
+  const lt=left===1?"بقي يوم عمل واحد":"بقي "+plural(left,P_DAY)+" للعمل";
+  if(needNew>0) w.push([left<=needNew,"زيارات الجدد هذا الأسبوع "+weekNew+"/"+cfg.weeklyNew+(left<=needNew?" · "+lt+": أضف عميلاً جديداً اليوم":"")]);
+  const dueCur=[...S.customers.values()].filter(c=>stOf(c.id)==="current"&&!ctx.visitedWeek.has(c.id)&&!inSet.has(c.id)).length;
+  if(dueCur>0) w.push([left<=2,plural(dueCur,P_CUR)+" لم يُزاروا هذا الأسبوع"+(left<=2?" · "+lt:"")]);
+  if(n<cfg.dailyTarget) w.push([false,"ناقص "+plural(cfg.dailyTarget-n,P_VISIT)+" لإكمال هدف اليوم"]);
+  if(n>=5){ const mx=Math.max(cnt.current,cnt.lapsed,cnt.new); if(mx/n>0.7) w.push([true,"الخطة مائلة: "+Math.round(mx/n*100)+"% من نوع واحد"]); }
+  const seg=k=>cnt[k]?'<i class="b-'+k+'" style="flex:'+cnt[k]+'"></i>':'';
+  return '<div class="balance"><div class="bbar" aria-hidden="true">'+(n?seg("current")+seg("lapsed")+seg("new"):"")+'</div>'
+   +'<div class="bleg"><span>حاليون '+cnt.current+'</span><span>سابقون '+cnt.lapsed+'</span><span>جدد '+cnt.new+'</span></div>'
+   +(w.length?'<ul class="bwarn">'+w.map(x=>'<li class="'+(x[0]?"warn":"")+'">'+esc(x[1])+'</li>').join("")+'</ul>':'')+'</div>';
 }
 
 /* ---------- auth + boot ---------- */
@@ -486,13 +798,20 @@ async function fetchAllVisits(){
 }
 async function loadAll(){
   try{
-    const [c,cfg,team,visits] = await Promise.all([
+    const [c,cfg,team,visits,fac,ord,cost] = await Promise.all([
       sb.from("customers").select("*"),
       sb.from("config").select("data").eq("id",1).maybeSingle(),
       sb.from("team").select("*"),
-      fetchAllVisits()
+      fetchAllVisits(),
+      sb.from("facilities").select("*"),
+      sb.from("orders").select("*"),
+      sb.from("order_costs").select("*")
     ]);
     if(c.error) throw c.error; if(team.error) throw team.error;
+    if(fac.error||ord.error) throw (fac.error||ord.error);
+    S.facilities = new Map(fac.data.map(r=>[r.id,rowToFac(r)]));
+    S.orders = ord.data.map(rowToOrder);
+    S.costs = new Map(((cost.error?[]:cost.data)||[]).map(r=>[r.order_id,Number(r.margin_pct)]));
     S.customers = new Map(c.data.map(r=>[r.id,rowToCust(r)]));
     S.team = new Map(team.data.map(t=>[String(t.email).toLowerCase(),t]));
     S.cfg = Object.assign({},DEF,(cfg.data&&cfg.data.data)||{});
@@ -511,6 +830,9 @@ function subscribe(){
   channel = sb.channel("ptv-live")
     .on("postgres_changes",{event:"*",schema:"public",table:"visits"},p=>{ if(p.eventType==="DELETE") dropVisit(p.old.id); else putVisit(p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"customers"},p=>{ if(p.eventType==="DELETE") S.customers.delete(p.old.id); else putCust(p.new); scheduleRefresh(); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"facilities"},p=>{ if(p.eventType==="DELETE") S.facilities.delete(p.old.id); else putFac(p.new); scheduleRefresh(); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"orders"},p=>{ if(p.eventType==="DELETE") dropOrder(p.old.id); else putOrder(p.new); scheduleRefresh(); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"order_costs"},p=>{ if(p.eventType==="DELETE") S.costs.delete(p.old.order_id); else S.costs.set(p.new.order_id,Number(p.new.margin_pct)); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"config"},p=>{ if(p.new&&p.new.data){ S.cfg=Object.assign({},DEF,p.new.data); scheduleRefresh(); } })
     .subscribe(status=>{ setLive(status==="SUBSCRIBED"); });
 }
@@ -579,8 +901,17 @@ function todayHTML(){
    +'<div class="slots'+(slotsN>14?" many":"")+'" aria-hidden="true">'+slots+'</div>'
    +'<div class="legend"><span><i style="background:var(--good)"></i>طلبية</span><span><i style="background:var(--accent)"></i>زيارة منجزة</span><span><i style="border:1.5px solid var(--accent)"></i>مخططة</span><span><i style="border:1.5px dashed var(--line)"></i>فارغة</span></div>'
    +'<div class="minis"><div class="mini"><b class="num">'+list.length+'</b><span>في الخطة</span></div><div class="mini"><b class="num">'+orders+'</b><span>طلبيات</span></div><div class="mini"><b class="num">'+weekNew+'/'+cfg.weeklyNew+'</b><span>زيارات جدد بالأسبوع</span></div></div>'
-   +'<div class="row grow"><button class="btn primary" data-act="open-planner">'+ICON.plus.replace("<svg",'<svg width="18" height="18"')+(list.length?"تعديل خطة اليوم":"خطط يومك")+'</button><button class="btn" data-act="open-log">زيارة غير مخططة</button></div>'
+   +(isFri&&!list.length?'':balanceHTML(list.filter(v=>v.state!=="missed").map(v=>v.customerId),day))
+   +'<button class="btn primary" data-act="open-suggest">'+ICON.spark.replace("<svg",'<svg width="18" height="18"')+(list.length?"أكمل الخطة تلقائياً":"اقترح خطة اليوم")+'</button>'
+   +'<div class="row grow"><button class="btn" data-act="open-planner">'+(list.length?"تعديل الخطة":"اختيار يدوي")+'</button><button class="btn" data-act="open-log">زيارة غير مخططة</button></div>'
    +'</section>';
+  if(day===t){
+    const co=carryItems(day);
+    if(co.length) h+='<section class="notice carry"><div><b>لديك '+plural(co.length,P_VISIT)+' مخططة لم تُنفَّذ في أيام سابقة</b><br>'+esc(co.slice(0,4).map(x=>cname(x.c)).join("، ")+(co.length>4?" وغيرهم":""))+'</div>'
+      +'<div class="row grow"><button class="btn sm primary" data-act="carry-move">رحّلها لليوم</button><button class="btn sm" data-act="carry-drop">تجاهلها</button></div></section>';
+  }
+  if(day===t && dow(day)!==5) h+=prioHTML(day);
+  if(day===t) h+=qualityBanner();
   if(isFri && !list.length) h+='<div class="empty"><b>الجمعة يوم راحة</b>لا توجد زيارات مخططة.</div>';
   else if(!list.length) h+='<div class="empty"><b>لا توجد زيارات مخططة لهذا اليوم</b>ابدأ يومك بالتخطيط: اختر '+cfg.dailyTarget+' عملاء من القاعدة، بحيث تبدأ بالحاليين المستحقين للزيارة، ثم السابقين، ثم الجدد.</div>';
   else {
@@ -590,24 +921,57 @@ function todayHTML(){
   }
   return h;
 }
+/* the "orders of the day": at most three things that must not be missed, each with the reason */
+function dailyPriorities(day){
+  const ctx=planCtx(day), best=new Map();
+  for(const c of S.customers.values()){
+    const dv=visitFor(c.id,day); if(dv&&dv.state==="done") continue;
+    const fm=fmOf(c), r=scoreCustomer(c,day,ctx), d=S.der.get(c.id)||{};
+    let u=0, why="";
+    if(r.kind==="carry"){ u=100; why="زيارة مخططة سابقاً لم تُنفَّذ"; }
+    else if(r.kind==="follow"){ u=95; why=r.reason; }
+    else if(fm&&fm.fading&&fm.tier!=="C"){ u=90+(fm.tier==="A"?8:0); why=fm.gap&&fm.dso!=null?"كان يطلب كل "+fm.gap+" يوماً وقد مرّ "+fm.dso+" يوماً":"اهتمامه يتراجع، تحرّك قبل أن تفقده"; }
+    else if(stageOf(c.id)==="new2"){ u=80; why="طلبيتان من ثلاث: ثبّته بالثالثة ليصبح حالياً"; }
+    else if(d.status==="lapsed"&&fm&&fm.tier!=="C"){ u=70; why="عميل سابق فئة "+fm.tier+(d.lastOrder?" · آخر طلبية قبل "+diff(d.lastOrder,day)+" يوماً":""); }
+    else continue;
+    const k=facKey(c), o=best.get(k); if(!o||u>o.u) best.set(k,{u,why,c,planned:!!dv});
+  }
+  return [...best.values()].sort((a,b)=>b.u-a.u).slice(0,3);
+}
+function prioHTML(day){
+  const items=dailyPriorities(day); if(!items.length) return "";
+  return '<section class="card"><h3>أولويات اليوم <small>لا تفوّتها</small></h3><div class="prio">'
+   +items.map(x=>'<div class="pi"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b><span class="pw">'+esc(facOf(x.c).name)+'</span><span class="pw">'+esc(x.why)+'</span></div>'
+     +(x.planned?'<span class="chip order">✓ في الخطة</span>':'<button class="btn sm primary" data-act="prio-add" data-id="'+esc(x.c.id)+'">أضف للخطة</button>')+'</div>').join("")
+   +'</div></section>';
+}
+function incompleteOrders(){ return S.orders.filter(o=>o.source==="manual"&&o.status!=="cancelled"&&(!o.orderNo||!(o.value>0))); }
+function qualityBanner(){
+  const nc=[...S.customers.values()].filter(c=>custIssues(c).length).length, no=incompleteOrders().length;
+  if(!nc&&!no) return "";
+  return '<section class="notice warnrow"><div><b>بيانات تحتاج استكمالاً</b><br>'+[nc?plural(nc,["عميل واحد ببيانات ناقصة","عميلان ببيانات ناقصة","عملاء ببيانات ناقصة","عميلاً ببيانات ناقصة"]):"",no?plural(no,["طلبية بلا رقم أو قيمة","طلبيتان بلا رقم أو قيمة","طلبيات بلا رقم أو قيمة","طلبية بلا رقم أو قيمة"]):""].filter(Boolean).join(" · ")+'</div><button class="btn sm primary" data-act="open-quality">استكمل</button></section>';
+}
 function lastNoteFor(cid, beforeDate){
   return S.visits.filter(x=>x.customerId===cid&&x.state==="done"&&x.notes&&x.date<=beforeDate).sort((a,b)=>a.date<b.date?1:-1)[0]||null;
 }
-function checkScore(v){return CHECKS.filter(c=>v.checks&&v.checks[c[0]]).length;}
+function checkN(v){ const k=Object.keys(v.checks||{}); return {n:k.filter(x=>v.checks[x]).length,t:k.length}; }
+function otherNames(v){ return (v.people||[]).map(p=>{const c=S.customers.get(p.id); return c?cname(c):""}).filter(Boolean); }
 function visitCard(v,o){
   o=o||{};
   const c=S.customers.get(v.customerId)||{};
   const phone=c.phone||"";
   let h='<article class="visit st-'+esc(v.state)+'">'
    +'<div class="v-top"><div style="min-width:0"><div class="v-name">'+(o.noLink?esc(cname(c)):'<button data-act="cust" data-id="'+esc(v.customerId)+'">'+esc(cname(c))+'</button>')+'</div>'
-   +'<div class="v-sub">'+esc([c.org,c.title].filter(Boolean).join(" · "))+'</div>'
+   +'<div class="v-sub">'+esc([facOf(c).name,c.title].filter(Boolean).join(" · "))+'</div>'
+   +(otherNames(v).length?'<div class="v-sub">ومعه: '+esc(otherNames(v).join("، "))+'</div>':'')
    +(o.showBy?'<div class="v-sub">سجّلها: '+esc(teamName(v.doneBy||v.by))+'</div>':'')+'</div>'
    +'<div class="v-time">'+(o.showDate?esc(dShort(v.date))+" ":"")+(v.time?esc(v.time):"")+'</div></div>'
-   +'<div class="v-meta">'+chipFor(v.customerId)+'<span>الهدف: '+esc(PURPOSE[v.purpose]||"")+'</span>'
+   +'<div class="v-meta">'+chipFor(v.customerId)+tierChip(c)+(v.state==="planned"?intChip(c):"")+'<span>الهدف: '+esc(v.goal||PURPOSE[v.purpose]||"")+'</span>'
    +(v.state==="done"&&v.result?'<span class="chip '+esc(v.result)+'">'+esc(RESULT[v.result])+'</span>':"")
+   +(v.state==="done"&&v.goalMet?'<span class="chip muted">الهدف: '+esc(GOAL_MET[v.goalMet]||"")+'</span>':"")
    +(v.state==="done"&&v.channel?'<span class="chip muted">'+esc(CHANNEL[v.channel])+'</span>':"")
    +(v.state==="missed"?'<span class="chip missed">لم تتم</span>':"")
-   +(v.state==="done"&&v.checks&&Object.keys(v.checks).length?'<span class="chip muted">الجودة '+checkScore(v)+'/6</span>':"")+'</div>';
+   +(v.state==="done"&&checkN(v).t?'<span class="chip muted">الجودة '+checkN(v).n+'/'+checkN(v).t+'</span>':"")+'</div>';
   if(v.state==="planned"){
     const last=lastNoteFor(v.customerId,v.date);
     if(last) h+='<div class="v-note"><span class="k">آخر ملاحظة · '+esc(dShort(last.date))+'</span>'+esc(last.notes)+(last.next&&last.next.text?"\nالخطوة المتفق عليها: "+esc(last.next.text):"")+'</div>';
@@ -618,6 +982,7 @@ function visitCard(v,o){
   if(v.coach&&v.coach.text) h+='<div class="coachnote"><span class="k">توجيه المدير</span>'+esc(v.coach.text)+'</div>';
   h+='<div class="v-actions">';
   if(phone) h+='<a class="btn sm" href="tel:'+esc(phone)+'">اتصال</a><a class="btn sm" href="'+esc(waLink(phone))+'" target="_blank" rel="noopener">واتساب</a>';
+  if(v.state==="planned") h+='<button class="btn sm" data-act="guide" data-id="'+esc(v.id)+'">المرشد</button>';
   h+='<button class="btn sm '+(v.state==="planned"?"primary":"")+'" data-act="result" data-id="'+esc(v.id)+'">'+(v.state==="planned"?"سجّل النتيجة":"تعديل")+'</button>';
   if(S.isOwner && v.state!=="planned") h+='<button class="btn sm ghost" data-act="coach" data-id="'+esc(v.id)+'">'+(v.coach&&v.coach.text?"تعديل التوجيه":"أضف توجيهاً")+'</button>';
   h+='</div></article>';
@@ -628,21 +993,25 @@ function visitCard(v,o){
 function custShellHTML(){
   return '<div class="searchbar"><input id="cust-q" class="input" type="search" placeholder="ابحث بالاسم أو الجهة أو المنطقة أو الرقم" aria-label="بحث العملاء">'
    +'<button class="btn primary" data-act="new-cust" aria-label="إضافة عميل">'+ICON.plus.replace("<svg",'<svg width="20" height="20"')+'</button></div>'
-   +'<div class="filters" id="cust-f"></div><div class="list" id="cust-list"></div>';
+   +'<div class="filters" id="cust-f"></div><button class="btn sm ghost" data-act="open-quality">جودة البيانات: ما الناقص؟</button><div class="list" id="cust-list"></div>';
 }
-function matchQ(c,q){ if(!q) return true; q=q.trim(); return [c.person,c.org,c.title,c.area,c.phone,c.type].some(x=>x&&String(x).includes(q)); }
+function matchQ(c,q){ if(!q) return true; q=q.trim(); return [c.person,c.org,facOf(c).name,c.title,c.area,c.phone,c.type].some(x=>x&&String(x).includes(q)); }
 function updateCustomers(){
   const all=[...S.customers.values()];
   const counts={all:all.length,current:0,lapsed:0,new:0,due:0};
   const ws=weekStart(todayStr());
   for(const c of all){const s=stOf(c.id);counts[s]++; if(s==="current"&&!(S.lastVisit.get(c.id)>=ws)) counts.due++;}
-  const F=[["all","الكل"],["current","حالي"],["due","حاليون لم يُزاروا هذا الأسبوع"],["lapsed","سابق"],["new","جديد"]];
+  counts.A=all.filter(c=>(fmOf(c)||{}).tier==="A").length; counts.fade=all.filter(c=>(fmOf(c)||{}).fading&&(fmOf(c)||{}).tier!=="C").length;
+  const F=[["all","الكل"],["current","حالي"],["due","حاليون لم يُزاروا هذا الأسبوع"],["lapsed","سابق"],["new","جديد"],["A","فئة A"],["fade","اهتمامه يبرد"]];
   $("#cust-f").innerHTML=F.map(f=>'<button data-act="filter" data-f="'+f[0]+'" aria-pressed="'+(S.filter===f[0])+'">'+f[1]+' <span class="num">'+counts[f[0]]+'</span></button>').join("");
   let rows=all.filter(c=>matchQ(c,S.q));
   if(S.filter==="due") rows=rows.filter(c=>stOf(c.id)==="current"&&!(S.lastVisit.get(c.id)>=ws));
+  else if(S.filter==="A") rows=rows.filter(c=>(fmOf(c)||{}).tier==="A");
+  else if(S.filter==="fade") rows=rows.filter(c=>(fmOf(c)||{}).fading&&(fmOf(c)||{}).tier!=="C");
   else if(S.filter!=="all") rows=rows.filter(c=>stOf(c.id)===S.filter);
-  const rank={current:0,lapsed:1,new:2};
-  rows.sort((a,b)=>{const sa=rank[stOf(a.id)],sb2=rank[stOf(b.id)]; if(sa!==sb2) return sa-sb2; const la=S.lastVisit.get(a.id)||"",lb=S.lastVisit.get(b.id)||""; return la<lb?-1:la>lb?1:0;});
+  const today=todayStr(), ctx=planCtx(today), pri=new Map();
+  for(const c of rows){ const r=scoreCustomer(c,today,ctx); if(visitFor(c.id,today)){ r.score-=1000; r.reason="✓ في خطة اليوم"; } pri.set(c.id,r); }
+  rows.sort((a,b)=>pri.get(b.id).score-pri.get(a.id).score);
   const el=$("#cust-list");
   if(!all.length){ el.innerHTML='<div class="empty"><b>قاعدة العملاء فارغة</b>أضف أول عميل بزر + في الأعلى.</div>'; return; }
   if(!rows.length){ el.innerHTML='<div class="empty"><b>لا توجد نتائج</b>جرّب كلمة بحث أخرى أو فلتراً مختلفاً.</div>'; return; }
@@ -650,8 +1019,8 @@ function updateCustomers(){
     const s=stOf(c.id), lv=S.lastVisit.get(c.id), d=S.der.get(c.id);
     const overdue = s==="current" && (!lv || diff(lv,todayStr())>=7);
     return '<button class="cust" data-act="cust" data-id="'+esc(c.id)+'"><span class="avatar '+s+'">'+esc(initials(c))+'</span>'
-     +'<span class="c-main"><span class="c-name">'+esc(cname(c))+'</span><span class="c-sub">'+esc([c.org,c.type].filter(Boolean).join(" · "))+'</span></span>'
-     +'<span class="c-side">'+chipFor(c.id)+'<span class="'+(overdue?"due":"")+'">'+esc(ago(lv))+'</span>'+(d&&d.count?'<span>'+d.count+' طلبية</span>':'')+'</span></button>';
+     +'<span class="c-main"><span class="c-name">'+esc(cname(c))+'</span><span class="c-sub">'+esc([facOf(c).name,c.title].filter(Boolean).join(" · "))+(custIssues(c).length?' ⚠':'')+'</span><span class="c-why">'+esc(pri.get(c.id).reason)+'</span></span>'
+     +'<span class="c-side"><span>'+tierChip(c)+' '+chipFor(c.id)+'</span>'+intChip(c)+'<span class="'+(overdue?"due":"")+'">'+esc(ago(lv))+'</span>'+(d&&d.count?'<span>'+d.count+' طلبية</span>':'')+'</span></button>';
   }).join("");
 }
 
@@ -680,7 +1049,8 @@ function dashHTML(){
   const planNow = cfg.planStartCount + cfg.monthlyConv*Math.max(0,monthsBetween(cfg.planStartMonth,mk));
   const wq = week.length? week : doneAll.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,30);
   const q = {
-    score: wq.length? Math.round(wq.reduce((s,v)=>s+checkScore(v),0)/(wq.length*6)*100):0,
+    score: (()=>{ const w=wq.filter(v=>checkN(v).t); return w.length? Math.round(w.reduce((s,v)=>s+checkN(v).n/checkN(v).t,0)/w.length*100):0; })(),
+    goal: (()=>{ const w=wq.filter(v=>v.goalMet); return w.length? Math.round(w.filter(v=>v.goalMet==="yes").length/w.length*100):0; })(),
     notes: wq.length? Math.round(wq.filter(v=>(v.notes||"").trim().length>=15).length/wq.length*100):0,
     next: wq.length? Math.round(wq.filter(v=>v.next&&v.next.text).length/wq.length*100):0,
     field: wq.length? Math.round(wq.filter(v=>v.channel!=="call").length/wq.length*100):0
@@ -706,11 +1076,13 @@ function dashHTML(){
    +'</section></div>';
   h+='<section class="card"><h3>الزيارات المنجزة · آخر 14 يوماً <small>الخط المتقطع = الهدف</small></h3>'+chart14(t)+'</section>';
   h+='<section class="card"><h3>جودة الزيارات <small>'+(week.length?"هذا الأسبوع":"آخر الزيارات")+' · '+wq.length+' زيارة</small></h3>'
-   +kpi("متوسط قائمة الجودة",q.score,100,{pct:1,hint:"6 خطوات للزيارة الاحترافية، تجدها في الدليل"})
+   +kpi("متوسط قائمة الجودة",q.score,100,{pct:1,hint:"قائمة تتغير حسب نوع العميل ومرحلته"})
+   +kpi("زيارات تحقق هدفها",q.goal,100,{pct:1,hint:"نسبة الزيارات التي أجاب فيها «تحقق»"})
    +kpi("زيارات بملاحظات واضحة",q.notes,100,{pct:1})
    +kpi("زيارات بخطوة قادمة محددة",q.next,100,{pct:1})
    +kpi("زيارات ميدانية بدل الاتصال",q.field,100,{pct:1,hint:"الزيارة الميدانية مفضّلة على الاتصال"})
    +'</section>';
+  h+=dashAccounts(t);
   h+='<section class="card"><h3>قاعدة العملاء</h3><div class="tiles">'
    +'<div class="tile"><b>'+cur.length+'</b><span>حالي</span></div><div class="tile"><b>'+lap.length+'</b><span>سابق (آخر طلبية قبل '+cfg.lapsedDays+' يوماً أو أكثر)</span></div>'
    +'<div class="tile"><b>'+nw.length+'</b><span>جديد</span></div><div class="tile"><b>'+nw.filter(c=>S.der.get(c.id).count>0).length+'</b><span>جدد بدأوا الطلب</span></div></div></section>';
@@ -720,6 +1092,34 @@ function dashHTML(){
    +'</section>';
   if(S.isOwner) h+='<button class="btn" data-act="settings">'+ICON.gear.replace("<svg",'<svg width="18" height="18"')+'أهداف الخطة</button>';
   return h;
+}
+/* tiers, fading accounts, stop reasons and incomplete orders */
+function dashAccounts(t){
+  const ms=[...S.facM.values()], cnt={A:0,B:0,C:0};
+  ms.forEach(m=>cnt[m.tier]++);
+  const fade=ms.filter(m=>m.fading&&m.tier!=="C").sort((a,b)=>(a.tier===b.tier?b.comp-a.comp:a.tier<b.tier?-1:1)).slice(0,6);
+  let h='<section class="card"><h3>فئات العملاء <small>'+ms.length+' منشأة</small></h3><div class="tiles">'
+   +'<div class="tile"><b>'+cnt.A+'</b><span>فئة A</span></div><div class="tile"><b>'+cnt.B+'</b><span>فئة B</span></div><div class="tile"><b>'+cnt.C+'</b><span>فئة C</span></div>'
+   +'<div class="tile"><b>'+ms.filter(m=>m.fading&&m.tier!=="C").length+'</b><span>تبرد (A/B)</span></div></div>';
+  if(fade.length) h+='<h2 class="sec">أولوية المتابعة: يبرد اهتمامها</h2><div class="prio">'+fade.map(m=>'<div class="pi"><div class="pm"><b>'+esc(m.fac.name||"منشأة")+' <span class="chip tier tier-'+m.tier+'">'+m.tier+'</span></b><span class="pw">'
+    +esc(m.gap&&m.dso!=null?"كانت تطلب كل "+m.gap+" يوماً وقد مرّ "+m.dso+" يوماً":(LEVEL[m.level]||""))+'</span></div><button class="btn sm" data-act="cust" data-id="'+esc(m.people[0].id)+'">فتح</button></div>').join("")+'</div>';
+  h+='</section>';
+  const rs=new Map(); const since=addDays(t,-60);
+  S.visits.filter(v=>v.state==="done"&&v.reason&&v.date>=since).forEach(v=>rs.set(v.reason,(rs.get(v.reason)||0)+1));
+  if(rs.size){ const mx=Math.max(...rs.values());
+    h+='<section class="card"><h3>أسباب عدم الاهتمام <small>آخر 60 يوماً</small></h3>'+[...rs].sort((a,b)=>b[1]-a[1]).map(([k,n])=>'<div class="kpi"><div class="kl"><span>'+esc(k)+'</span><b class="num">'+n+'</b></div><div class="bar"><i style="width:'+Math.round(n/mx*100)+'%"></i></div></div>').join("")+'</section>'; }
+  const inc=incompleteOrders().sort((a,b)=>a.date<b.date?1:-1).slice(0,8);
+  const nm=S.isOwner?S.orders.filter(o=>o.status!=="cancelled"&&!S.costs.has(o.id)).length:0;
+  if(inc.length||nm){
+    h+='<section class="card"><h3>طلبيات تحتاج استكمالاً'+(nm?' <small>'+nm+' بلا هامش ربح</small>':'')+'</h3>'
+     +(inc.length?'<div class="list">'+inc.map(o=>orderRow(o)).join("")+'</div>':'<div class="v-sub">كل الطلبيات لها رقم وقيمة.</div>')
+     +(nm?'<button class="btn" data-act="margins">أدخل هامش الربح للطلبيات</button>':'')+'</section>';
+  }
+  return h;
+}
+function orderRow(o){
+  const c=S.customers.get(o.customerId);
+  return '<div class="ord"><span>'+esc(dShort(o.date))+' · '+esc(c?cname(c):"—")+'</span><span class="num">'+(o.orderNo?esc(o.orderNo):'<span class="due">بلا رقم</span>')+' · '+(o.value>0?o.value.toLocaleString("en-US")+' ر.س':'<span class="due">بلا قيمة</span>')+'</span><button class="btn sm" data-act="edit-order" data-id="'+esc(o.id)+'">تعديل</button></div>';
 }
 function chart14(t){
   const days=[];for(let i=13;i>=0;i--) days.push(addDays(t,-i));
@@ -764,7 +1164,14 @@ function guideHTML(){
   +'<li><b>اربط بارتك بالاحتياج:</b> سرعة التوصيل، توفر القطعة، السعر، والمتابعة الشخصية.</li>'
   +'<li><b>اطلب الطلبية صراحة:</b><div class="say">«خلني أسجل لك الطلبية الحين وتوصلك اليوم.»</div></li>'
   +'<li><b>لا تخرج بدون خطوة قادمة بموعد:</b> متى الزيارة القادمة؟ ماذا سأحضر له؟</li></ol>'
-  +'<div>هذه الخطوات هي نفسها «قائمة الجودة» التي تعبئها عند تسجيل كل زيارة.</div></div></details>'
+  +'<div>زر «المرشد» على كل زيارة مخططة يعرض لك خطوات مخصصة لمرحلة هذا العميل (جديد، حالي، سابق) ونوع منشأته. وقائمة الجودة عند التسجيل تتغير بنفس الطريقة.</div></div></details>'
+  +'<details><summary>فئات العملاء A / B / C والاهتمام</summary><div class="gb">'
+  +'<div>تُحسب فئة كل منشأة من: نوعها وحجمها (فروع وأسطول)، ونشاطها الفعلي (عدد الطلبيات)، وقيمة طلباتها، وهامش الربح، واهتمامها. المنشأة الكبيرة تبدأ بفئة عالية حتى قبل أول طلبية، والورشة الصغيرة المنتظمة ترتفع بأدائها.</div>'
+  +'<div><b>الاهتمام</b> يُحسب من نتائج زياراتك ومن الطلبيات الفعلية وإيقاع طلب العميل المعتاد. إذا تأخر العميل عن إيقاعه تظهر «اهتمامه يبرد» وتُرفع أولويته في خطتك.</div></div></details>'
+  +'<details><summary>البيانات الإلزامية</summary><div class="gb"><ul>'
+  +'<li><b>العميل:</b> اسم الشخص، المنصب، اسم المنشأة، المنطقة، جوال صحيح.</li>'
+  +'<li><b>الزيارة:</b> النتيجة، ملاحظة مفصلة، هل تحقق الهدف، خطوة قادمة بتاريخ. وإن كانت طلبية: القيمة ورقمها. وإن كانت «غير مهتم»: السبب.</li>'
+  +'<li>التطبيق لا يحفظ الناقص، ويعرض لك ما ينقص بوضوح. وشاشة «جودة البيانات» في تبويب العملاء تجمع كل ما يحتاج استكمالاً.</li></ul></div></details>'
   +'<details><summary>حسب نوع العميل</summary><div class="gb">'
   +'<div class="obj"><b><span class="chip current">حالي</span> الهدف: طلبية كل أسبوع</b>اسأل عن القطع المتكررة واقترح طلبية ثابتة. اسأل عن رضاه عن آخر طلبية، فالعميل الحالي أسهل بيع وأغلى خسارة.</div>'
   +'<div class="obj"><b><span class="chip lapsed">سابق</span> الهدف: طلبية واحدة تعيده</b>اعرف سبب التوقف أولاً واستمع بدون دفاع. اعرض حلاً للسبب وطلبية تجربة صغيرة، وتابعها بنفسك حتى التسليم.</div>'
@@ -778,6 +1185,14 @@ function guideHTML(){
   +'<div>الملاحظة الجيدة تجيب عن أربعة أسئلة: <b>ماذا يحتاج العميل؟ ماذا قال؟ ماذا اتفقنا؟ متى الخطوة القادمة؟</b></div>'
   +'<div class="say">مثال: «يحتاج فحمات وفلاتر لسيارات كامري أسبوعياً، يشتري حالياً من محل بالحي. أخذت طلبية تجربة 4 فحمات. أمر عليه الأحد للتأكد من التسليم وأعرض طلبية الفلاتر.»</div>'
   +'<div>تجنب الملاحظات العامة مثل «تمت الزيارة» أو «العميل مهتم».</div></div></details>'
+  +'<details><summary>كيف يقترح التطبيق خطة يومك</summary><div class="gb">'
+  +'<div>زر «اقترح خطة اليوم» يختار لك الزيارات بهذا الترتيب، وبجانب كل عميل سبب اختياره:</div><ol>'
+  +'<li><b>زيارات مرحّلة</b> لم تنفّذها في أيام سابقة.</li>'
+  +'<li><b>متابعات مستحقة</b> وعدت بها العميل في زيارة سابقة.</li>'
+  +'<li><b>حصة الجدد:</b> زيارتان أسبوعياً موزعة على أيام الأسبوع.</li>'
+  +'<li><b>حاليون لم تزرهم هذا الأسبوع</b>، الأقدم زيارة أولاً.</li>'
+  +'<li><b>سابقون للاسترجاع</b>، ثم باقي العملاء حسب الأولوية.</li></ol>'
+  +'<div>العميل المميز بنجمة ★ (يحددها المدير) يتقدم في الترتيب. ويجمع التطبيق زيارات المنطقة الواحدة معاً لتوفير التنقل. كل شيء قابل للتعديل قبل الاعتماد وبعده.</div></div></details>'
   +'<details><summary>تثبيت التطبيق على الجوال</summary><div class="gb"><ol>'
   +'<li>افتح رابط التطبيق في متصفح <b>Chrome</b> على الأندرويد.</li>'
   +'<li>اضغط زر <b>تثبيت</b> إن ظهر، أو افتح قائمة Chrome (⋮) واختر <b>تثبيت التطبيق</b> أو <b>إضافة إلى الشاشة الرئيسية</b>.</li>'
@@ -808,7 +1223,7 @@ function openPlanner(mode){
   openSheet({
     title: mode==="plan" ? "خطة "+esc(dLong(day)) : "تسجيل زيارة غير مخططة",
     sub: mode==="plan" ? '<span id="pl-count"></span>' : "اختر العميل الذي زرته أو اتصلت به",
-    body:'<input id="pl-q" class="input" type="search" placeholder="بحث بالاسم أو الجهة" aria-label="بحث">'
+    body:(mode==="plan"?'<div id="pl-balance"></div>':'')+'<input id="pl-q" class="input" type="search" placeholder="بحث بالاسم أو الجهة" aria-label="بحث">'
       +(areas.length?'<div class="filters" id="pl-areas">'+['<button data-area="" aria-pressed="true">كل المناطق</button>'].concat(areas.map(a=>'<button data-area="'+esc(a)+'" aria-pressed="false">'+esc(a)+'</button>')).join("")+'</div>':'')
       +'<div id="pl-list"></div>',
     foot: mode==="plan" ? '<button class="btn primary" data-act="close-sheet">تم</button>' : '',
@@ -840,25 +1255,27 @@ function openPlanner(mode){
     const ws=weekStart(day), we=addDays(ws,6), cfg=S.cfg;
     if(mode==="plan"){ const pc=$("#pl-count"); if(pc) pc.textContent="في الخطة "+visitsOn(day).length+" من "+cfg.dailyTarget+" زيارات · زيارات الجدد هذا الأسبوع "+S.visits.filter(v=>v.kind==="new"&&v.date>=ws&&v.date<=we&&v.state!=="missed").length+"/"+cfg.weeklyNew; }
     const all=[...S.customers.values()].filter(c=>matchQ(c,qv)&&(!area||c.area===area));
-    const lv=c=>S.lastVisit.get(c.id)||"";
-    const visitedThisWeek=c=>S.visits.some(v=>v.customerId===c.id&&v.date>=ws&&v.date<=we&&v.state==="done"&&v.date!==day);
+    if(mode==="plan"){ const pb=$("#pl-balance"); if(pb) pb.innerHTML=balanceHTML(visitsOn(day).filter(v=>v.state!=="missed").map(v=>v.customerId),day); }
+    const ctx=planCtx(day), sc=new Map(all.map(c=>[c.id,scoreCustomer(c,day,ctx)]));
+    const kindOf=c=>sc.get(c.id).kind, byScore=(a,b)=>sc.get(b.id).score-sc.get(a.id).score;
     const groups=[
-      ["حاليون مستحقون للزيارة هذا الأسبوع", all.filter(c=>stOf(c.id)==="current"&&!visitedThisWeek(c)), true],
-      ["سابقون للاسترجاع", all.filter(c=>stOf(c.id)==="lapsed"), true],
-      ["جدد", all.filter(c=>stOf(c.id)==="new").sort((a,b)=>S.der.get(b.id).count-S.der.get(a.id).count), false],
-      ["حاليون تمت زيارتهم هذا الأسبوع", all.filter(c=>stOf(c.id)==="current"&&visitedThisWeek(c)), true]
+      ["مرحّلة ومتابعات مستحقة", all.filter(c=>kindOf(c)==="carry"||kindOf(c)==="follow")],
+      ["حاليون مستحقون للزيارة هذا الأسبوع", all.filter(c=>kindOf(c)==="current")],
+      ["سابقون للاسترجاع", all.filter(c=>kindOf(c)==="lapsed")],
+      ["جدد", all.filter(c=>kindOf(c)==="new")],
+      ["حاليون تمت زيارتهم هذا الأسبوع", all.filter(c=>kindOf(c)==="current-done")]
     ];
     let h="";
-    for(const [label,rows,byLast] of groups){
+    for(const [label,rows] of groups){
       if(!rows.length) continue;
-      if(byLast) rows.sort((a,b)=>lv(a)<lv(b)?-1:lv(a)>lv(b)?1:0);
+      rows.sort(byScore);
       h+='<div class="grp-h">'+label+' · '+rows.length+'</div>';
       h+=rows.map(c=>{
         const ex=visitFor(c.id,day);
         const on=!!ex, lock=ex&&ex.state!=="planned";
         const cls= lock?"tog lock": on?"tog on":"tog";
         const lbl = mode==="log" ? "سجّل زيارة "+cname(c) : (on?"إزالة "+cname(c)+" من الخطة":"إضافة "+cname(c)+" للخطة");
-        return '<div class="pick"><div class="p-main"><div class="p-name">'+esc(cname(c))+' '+chipFor(c.id)+'</div><div class="p-sub">'+esc([c.org,c.area&&!String(c.org||"").includes(c.area)?c.area:""].filter(Boolean).join(" · "))+' · '+esc(ago(S.lastVisit.get(c.id)))+'</div></div>'
+        return '<div class="pick"><div class="p-main"><div class="p-name">'+esc(cname(c))+' '+chipFor(c.id)+'</div><div class="p-sub">'+esc([facOf(c).name,c.area&&!String(facOf(c).name||"").includes(c.area)?c.area:""].filter(Boolean).join(" · "))+' '+tierChip(c)+intChip(c)+'</div><div class="why">'+esc(sc.get(c.id).reason)+'</div></div>'
           +'<button class="'+(mode==="log"?"tog":cls)+'" data-pick="'+esc(c.id)+'" aria-label="'+esc(lbl)+'"'+(mode==="plan"?' aria-pressed="'+on+'"':'')+'>'+(mode==="log"?ICON.next:(on?ICON.check:ICON.plus))+'</button></div>';
       }).join("");
     }
@@ -866,75 +1283,283 @@ function openPlanner(mode){
   }
 }
 
-/* result sheet */
+/* suggested plan: everything pre-selected, the salesman unticks what he doesn't want, then confirms */
+function openSuggest(){
+  const day=S.day;
+  if(dow(day)===5){ toast("الجمعة يوم راحة"); return; }
+  const areas=[...new Set([...S.customers.values()].map(c=>c.area).filter(Boolean))];
+  let areaPref="", res=null, sel=new Set();
+  const run=()=>{ res=suggestPlan(day,areaPref); sel=new Set(res.picks.map(p=>p.id)); };
+  run();
+  openSheet({
+    title:"خطة مقترحة لـ"+esc(dLong(day)),
+    sub:'<span id="sg-sub"></span>',
+    body:'<div id="sg-balance"></div>'
+      +(areas.length?'<div class="field"><span class="lab">منطقة اليوم</span><div class="filters" id="sg-areas">'+['<button data-area="" aria-pressed="true">تلقائي</button>'].concat(areas.map(a=>'<button data-area="'+esc(a)+'" aria-pressed="false">'+esc(a)+'</button>')).join("")+'</div></div>':'')
+      +'<div id="sg-list"></div>',
+    foot:'<button class="btn primary" id="sg-ok"></button><button class="btn" data-act="close-sheet">إلغاء</button>',
+    mount(root){
+      const ar=$("#sg-areas",root);
+      if(ar) ar.addEventListener("click",e=>{const b=e.target.closest("[data-area]");if(!b)return;areaPref=b.dataset.area;ar.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));run();draw();});
+      $("#sg-list",root).addEventListener("click",e=>{const b=e.target.closest("[data-sg]");if(!b)return;const id=b.dataset.sg;if(sel.has(id)) sel.delete(id); else sel.add(id);draw();});
+      $("#sg-ok",root).addEventListener("click",async()=>{
+        const picks=res.picks.filter(p=>sel.has(p.id)); if(!picks.length) return;
+        $("#sg-ok").disabled=true;
+        const n=await addPlanned(day,picks);
+        if(n){ toast("أُضيفت "+n+" زيارات للخطة. يمكنك تعديلها من «تعديل الخطة»"); closeSheet(); } else $("#sg-ok").disabled=false;
+      });
+      draw();
+    },
+    onUpdate(){}
+  });
+  function draw(){
+    const list=$("#sg-list"); if(!list) return;
+    const picks=res.picks, n=sel.size;
+    const existing=visitsOn(day).filter(v=>v.state!=="missed").map(v=>v.customerId);
+    $("#sg-sub").textContent= res.slots? "في الخطة "+res.inPlan+" · مقترح "+picks.length+(res.area?" · المنطقة الرئيسية: "+res.area:"") : "خطة اليوم مكتملة ("+res.inPlan+" من "+S.cfg.dailyTarget+")";
+    $("#sg-balance").innerHTML=balanceHTML(existing.concat([...sel]),day);
+    const ok=$("#sg-ok"); ok.textContent= n? "أضف "+n+" زيارات للخطة":"لا توجد زيارات"; ok.disabled=!n;
+    if(!picks.length){ list.innerHTML='<div class="empty"><b>'+(res.slots?"لا يوجد عملاء متاحون للاقتراح":"لا مقاعد فارغة")+'</b>'+(res.slots?"كل العملاء في خطة اليوم بالفعل.":"زد هدف اليوم من إعدادات الخطة أو أزل زيارة أولاً.")+'</div>'; return; }
+    let last=null, h="";
+    for(const p of picks){
+      const a=p.area||"بدون منطقة";
+      if(a!==last){ h+='<div class="grp-h">'+esc(a)+'</div>'; last=a; }
+      const on=sel.has(p.id), c=p.c;
+      h+='<div class="pick"><div class="p-main"><div class="p-name">'+esc(cname(c))+' '+chipFor(p.id)+'</div><div class="p-sub">'+esc(facOf(c).name||"")+' '+tierChip(c)+'</div><div class="why">'+esc(p.reason)+'</div></div>'
+        +'<button class="tog'+(on?" on":"")+'" data-sg="'+esc(p.id)+'" aria-pressed="'+on+'" aria-label="'+esc((on?"إزالة ":"إضافة ")+cname(c))+'">'+(on?ICON.check:ICON.plus)+'</button></div>';
+    }
+    list.innerHTML=h;
+  }
+}
+
+/* result sheet: adaptive to the customer's stage, with mandatory fields that cannot be skipped */
+function num(s){ const n=Number(String(s||"").replace(/[٠-٩]/g,x=>"٠١٢٣٤٥٦٧٨٩".indexOf(x)).replace(/[,\s٬]/g,"")); return isFinite(n)?n:0; }
 function openResult(id, opt){
   const v=S.visitById.get(id); if(!v){ toast("الزيارة غير موجودة"); return; }
   const c=S.customers.get(v.customerId)||{};
+  const stg=STAGES[stageOf(v.customerId)];
+  const others=(S.facPeople.get(facKey(c))||[]).filter(x=>x.id!==c.id);
+  const prevP=new Map((v.people||[]).map(p=>[p.id,p]));
+  const myOrder=S.orders.find(o=>o.visitId===v.id&&o.customerId===v.customerId);
   const r=(name,val,label,checked)=>'<input type="radio" name="'+name+'" id="'+name+'-'+val+'" value="'+val+'"'+(checked?" checked":"")+'><label for="'+name+'-'+val+'">'+label+'</label>';
   const ch=v.channel||"visit";
+  const goals=stg.goals.concat(v.goal&&!stg.goals.includes(v.goal)?[v.goal]:[]);
+  const curGoal=v.goal||stg.goals[0];
   let body='';
   body+='<div class="field"><span class="lab">طريقة التواصل</span><div class="seg">'+r("rs-ch","visit","زيارة ميدانية",ch==="visit")+r("rs-ch","call","اتصال",ch==="call")+'</div></div>';
-  body+='<div class="field"><span class="lab">النتيجة</span><div class="seg">'+Object.keys(RESULT).map(k=>r("rs-res",k,RESULT[k],v.result===k)).join("")+'</div></div>';
-  body+='<div class="field"><label for="rs-notes">ملاحظات الزيارة</label><textarea id="rs-notes" class="input" placeholder="ماذا يحتاج العميل؟ ماذا قال؟ ماذا اتفقنا؟">'+esc(v.notes||"")+'</textarea><span class="help">اكتب بالتفصيل، فهذه الملاحظة تظهر لك قبل زيارتك القادمة لنفس العميل.</span></div>';
+  body+='<div class="field" id="f-res"><span class="lab">النتيجة</span><div class="seg">'+Object.keys(RESULT).map(k=>r("rs-res",k,RESULT[k],v.result===k)).join("")+'</div></div>';
+  body+='<div class="field" id="rs-reasonbox" hidden><label for="rs-reason">سبب عدم الاهتمام</label><select id="rs-reason" class="input"><option value="">اختر السبب</option>'+REASONS.map(x=>'<option'+(v.reason===x?" selected":"")+'>'+x+'</option>').join("")+'</select></div>';
+  body+='<div class="field" id="rs-orderbox" hidden><span class="lab">بيانات الطلبية</span>'
+    +'<input id="rs-ono" class="input" dir="ltr" placeholder="رقم الطلبية في برنامج العمليات" value="'+esc(myOrder&&myOrder.orderNo||"")+'">'
+    +'<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="rs-nono" style="width:18px;height:18px;accent-color:var(--accent)"'+(myOrder&&!myOrder.orderNo?" checked":"")+'>لم أحصل على الرقم بعد (سيظهر لك تنبيه لاستكماله)</label>'
+    +'<input id="rs-val" class="input" inputmode="decimal" dir="ltr" placeholder="قيمة الطلبية بالريال" value="'+esc(myOrder&&myOrder.value>0?myOrder.value:"")+'">'
+    +(S.isOwner?'<input id="rs-mar" class="input" inputmode="decimal" dir="ltr" placeholder="هامش الربح % (للمدير فقط)" value="'+esc(myOrder&&S.costs.has(myOrder.id)?S.costs.get(myOrder.id):"")+'">':'')
+    +'</div>';
+  body+='<div class="field" id="rs-goalbox"><label for="rs-goal">هدف الزيارة</label><select id="rs-goal" class="input">'+goals.map(g=>'<option'+(g===curGoal?" selected":"")+'>'+esc(g)+'</option>').join("")+'</select>'
+    +'<span class="lab" style="margin-top:4px">هل تحقق الهدف؟</span><div class="seg" id="f-gm" style="grid-template-columns:repeat(3,1fr)">'+Object.keys(GOAL_MET).map(k=>r("rs-gm",k,GOAL_MET[k],v.goalMet===k)).join("")+'</div></div>';
+  if(others.length){
+    body+='<div class="field" id="rs-peoplebox"><span class="lab">هل قابلت أشخاصاً آخرين من نفس المنشأة؟</span><div class="people-pick">'+others.map((o,i)=>{
+      const p=prevP.get(o.id), on=!!p, po=S.orders.find(x=>x.visitId===v.id&&x.customerId===o.id);
+      return '<div class="pp"><label class="pph"><input type="checkbox" id="pp-on-'+i+'"'+(on?" checked":"")+'><span>'+esc(cname(o))+(o.title?' · '+esc(o.title):'')+'</span></label>'
+        +'<div id="pp-box-'+i+'"'+(on?'':' hidden')+' style="display:flex;flex-direction:column;gap:6px"><select id="pp-res-'+i+'" class="input">'+["order","interested","notnow"].map(k=>'<option value="'+k+'"'+((p&&p.result)===k?" selected":"")+'>'+RESULT[k]+'</option>').join("")+'</select>'
+        +'<div id="pp-ord-'+i+'" hidden style="display:flex;flex-direction:column;gap:6px"><input id="pp-no-'+i+'" class="input" dir="ltr" placeholder="رقم الطلبية" value="'+esc(po&&po.orderNo||"")+'"><input id="pp-val-'+i+'" class="input" inputmode="decimal" dir="ltr" placeholder="قيمة الطلبية بالريال" value="'+esc(po&&po.value>0?po.value:"")+'"></div></div></div>';
+    }).join("")+'</div><span class="help">كل شخص يُحسب له طلبه ونتيجته على حدة، والزيارة تبقى واحدة.</span></div>';
+  }
+  body+='<div class="field"><label for="rs-notes">ملاحظات الزيارة</label><textarea id="rs-notes" class="input" placeholder="ماذا يحتاج العميل؟ ماذا قال؟ ماذا اتفقنا؟">'+esc(v.notes||"")+'</textarea><span class="help">25 حرفاً على الأقل. هذه الملاحظة تظهر لك قبل زيارتك القادمة لنفس العميل.</span></div>';
   body+='<div class="field"><label for="rs-next">الخطوة القادمة</label><input id="rs-next" class="input" value="'+esc(v.next&&v.next.text||"")+'" placeholder="مثال: أمرّ عليه لتأكيد التسليم وأعرض الفلاتر">'
-    +'<input id="rs-nextd" class="input" type="date" value="'+esc(v.next&&v.next.date||"")+'" aria-label="تاريخ الخطوة القادمة" min="'+esc(v.date)+'">'
+    +'<input id="rs-nextd" class="input" type="date" value="'+esc(v.next&&v.next.date||"")+'" aria-label="تاريخ الخطوة القادمة" min="'+esc(addDays(v.date,1))+'">'
     +'<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="rs-auto" checked style="width:18px;height:18px;accent-color:var(--accent)">أضفها تلقائياً إلى خطة ذلك اليوم</label></div>';
-  body+='<div class="field"><span class="lab">قائمة الجودة · <span id="rs-score">0</span>/6</span><div class="checks">'+CHECKS.map(k=>'<label><input type="checkbox" id="rs-ck-'+k[0]+'"'+(v.checks&&v.checks[k[0]]?" checked":"")+'>'+k[1]+'</label>').join("")+'</div></div>';
-  body+='<div class="row grow"><div class="field"><label for="rs-purpose">هدف الزيارة</label><select id="rs-purpose" class="input">'+Object.keys(PURPOSE).map(k=>'<option value="'+k+'"'+(v.purpose===k?" selected":"")+'>'+PURPOSE[k]+'</option>').join("")+'</select></div>'
-    +'<div class="field"><label for="rs-time">الوقت</label><input id="rs-time" class="input" type="time" value="'+esc(v.time||"")+'"></div></div>';
+  body+='<div class="field" id="rs-checkbox"><span class="lab">ما أنجزته في الزيارة · '+esc(stg.label)+' · <span id="rs-score">0</span>/'+stg.checks.length+'</span><div class="checks">'+stg.checks.map(k=>'<label><input type="checkbox" id="rs-ck-'+k[0]+'"'+(v.checks&&v.checks[k[0]]?" checked":"")+'>'+k[1]+'</label>').join("")+'</div></div>';
+  body+='<div class="field"><label for="rs-time">الوقت</label><input id="rs-time" class="input" type="time" value="'+esc(v.time||"")+'"></div>';
   body+='<div class="err" id="rs-err" hidden></div>';
   let foot='<button class="btn primary" id="rs-save">حفظ النتيجة</button>';
   if(v.state!=="done") foot+='<button class="btn" id="rs-missed">لم تتم الزيارة</button><button class="btn danger" id="rs-del">'+(opt&&opt.fresh?"إلغاء":"إزالة من الخطة")+'</button>';
   openSheet({
     title: esc(cname(c)),
-    sub: esc([c.org, dLong(v.date)].filter(Boolean).join(" · ")) + ' ' + chipFor(v.customerId),
+    sub: esc([facOf(c).name, dLong(v.date)].filter(Boolean).join(" · ")) + ' ' + chipFor(v.customerId),
     body, foot,
     mount(root){
-      const upd=()=>{$("#rs-score").textContent=CHECKS.filter(k=>$("#rs-ck-"+k[0]).checked).length;};
-      root.querySelectorAll(".checks input").forEach(i=>i.addEventListener("change",upd)); upd();
-      $("#rs-save").addEventListener("click",()=>saveResult(v));
+      const sync=()=>{
+        const res=(root.querySelector('input[name="rs-res"]:checked')||{}).value||"";
+        $("#rs-reasonbox").hidden=res!=="notnow"; $("#rs-orderbox").hidden=res!=="order";
+        $("#rs-goalbox").hidden=res==="absent"; $("#rs-checkbox").hidden=res==="absent";
+        $("#rs-score").textContent=stg.checks.filter(k=>$("#rs-ck-"+k[0]).checked).length;
+        others.forEach((o,i)=>{ const on=$("#pp-on-"+i).checked; $("#pp-box-"+i).hidden=!on; $("#pp-ord-"+i).hidden=!(on&&$("#pp-res-"+i).value==="order"); });
+      };
+      root.addEventListener("change",sync); sync();
+      $("#rs-save").addEventListener("click",()=>saveResult(v,stg,others));
       const m=$("#rs-missed"); if(m) m.addEventListener("click",async()=>{ if(await updateVisit(v.id,{state:"missed",time:$("#rs-time").value},"سُجّلت كزيارة لم تتم")) closeSheet(); });
       const d=$("#rs-del"); if(d) d.addEventListener("click",async()=>{ if(await removeVisit(v.id)) closeSheet(); });
     }
   });
 }
-async function saveResult(v){
-  const err=$("#rs-err");
+async function saveResult(v,stg,others){
+  const err=$("#rs-err"), bad=[], miss=[];
+  document.querySelectorAll("#sh-body .bad").forEach(x=>x.classList.remove("bad"));
+  const fail=(msg,el)=>{ miss.push(msg); if(el) bad.push(el); };
   const res=(document.querySelector('input[name="rs-res"]:checked')||{}).value;
   const channel=(document.querySelector('input[name="rs-ch"]:checked')||{}).value||"visit";
-  const notes=$("#rs-notes").value.trim();
-  const nt=$("#rs-next").value.trim(), nd=$("#rs-nextd").value;
-  const checks={}; CHECKS.forEach(k=>checks[k[0]]=$("#rs-ck-"+k[0]).checked);
-  if(!res){ err.textContent="اختر نتيجة الزيارة."; err.hidden=false; return; }
-  if(res!=="absent" && notes.length<10){ err.textContent="اكتب ملاحظة قصيرة: ماذا يحتاج العميل وماذا اتفقتما."; err.hidden=false; $("#rs-notes").focus(); return; }
+  const notes=$("#rs-notes").value.trim(), nt=$("#rs-next").value.trim(), nd=$("#rs-nextd").value;
+  const gm=(document.querySelector('input[name="rs-gm"]:checked')||{}).value||"";
+  const reason=$("#rs-reason").value;
+  const entries=[], people=[];
+  if(!res) fail("اختر نتيجة الزيارة",$("#f-res"));
+  else if(res==="absent"){
+    if(!nd||nd<=v.date) fail("حدد موعد زيارة قادمة لأن العميل لم يتواجد",$("#rs-nextd"));
+  } else {
+    if(notes.length<25) fail("اكتب ملاحظة مفصلة (25 حرفاً على الأقل): ماذا يحتاج العميل وماذا اتفقتما",$("#rs-notes"));
+    if(!gm) fail("أجب: هل تحقق هدف الزيارة؟",$("#f-gm"));
+    if(res==="notnow"&&!reason) fail("اختر سبب عدم الاهتمام",$("#rs-reason"));
+    if(nt.length<5) fail("اكتب الخطوة القادمة",$("#rs-next"));
+    if(!nd||nd<=v.date) fail("حدد تاريخ الخطوة القادمة (بعد تاريخ الزيارة)",$("#rs-nextd"));
+    if(res==="order"){
+      const val=num($("#rs-val").value), no=$("#rs-ono").value.trim(), nono=$("#rs-nono").checked;
+      if(!(val>0)) fail("اكتب قيمة الطلبية بالريال",$("#rs-val"));
+      if(!no&&!nono) fail("اكتب رقم الطلبية أو علّم «لم أحصل على الرقم بعد»",$("#rs-ono"));
+      entries.push({cid:v.customerId,orderNo:no,value:val,margin:S.isOwner&&$("#rs-mar")&&$("#rs-mar").value.trim()!==""?num($("#rs-mar").value):null});
+    }
+    others.forEach((o,i)=>{
+      if(!$("#pp-on-"+i).checked) return;
+      const rr=$("#pp-res-"+i).value, p={id:o.id,result:rr};
+      if(rr==="order"){
+        const val=num($("#pp-val-"+i).value); if(!(val>0)) fail("اكتب قيمة طلبية "+cname(o),$("#pp-val-"+i));
+        p.orderNo=$("#pp-no-"+i).value.trim(); p.value=val; entries.push({cid:o.id,orderNo:p.orderNo,value:val,margin:null});
+      }
+      people.push(p);
+    });
+  }
+  if(miss.length){
+    bad.forEach(e=>e.classList.add("bad"));
+    err.innerHTML='<b>أكمل ما يلي قبل الحفظ:</b><ul style="margin:4px 0 0;padding-inline-start:18px">'+miss.map(m=>'<li>'+esc(m)+'</li>').join("")+'</ul>';
+    err.hidden=false; if(bad[0]&&bad[0].scrollIntoView) bad[0].scrollIntoView({block:"center",behavior:"smooth"}); return;
+  }
   err.hidden=true;
-  const autoNext=$("#rs-auto").checked;
+  const abs=res==="absent", checks={};
+  if(!abs) stg.checks.forEach(k=>checks[k[0]]=$("#rs-ck-"+k[0]).checked);
   const btn=$("#rs-save"); btn.disabled=true;
-  const ok=await updateVisit(v.id,{state:"done",result:res,channel,notes,next_text:nt,next_date:nd||null,checks,purpose:$("#rs-purpose").value,time:$("#rs-time").value,done_at:new Date().toISOString(),done_by:S.email});
+  const ok=await updateVisit(v.id,{state:"done",result:res,channel,notes,next_text:nt,next_date:nd||null,checks,goal:abs?v.goal:$("#rs-goal").value,goal_met:abs?"":gm,reason:res==="notnow"?reason:"",people,time:$("#rs-time").value,done_at:new Date().toISOString(),done_by:S.email});
   if(!ok){ btn.disabled=false; return; }
+  await syncOrders(S.visitById.get(v.id)||v,entries);
   let msg = res==="order" ? "حُفظت. مبروك على الطلبية!" : "حُفظت النتيجة";
-  if(nd && autoNext && nd!==v.date && !visitFor(v.customerId,nd)){
+  if(nd && $("#rs-auto").checked && nd!==v.date && !visitFor(v.customerId,nd)){
     const nid=await createVisit(v.customerId,nd,{purpose:"followup",from_visit:v.id});
     if(nid) msg+=" وأُضيفت المتابعة لخطة "+dShort(nd);
   }
   toast(msg); closeSheet();
 }
 
+/* orders: one row per person who ordered in a visit; margin is stored apart and only the manager can read it */
+async function syncOrders(v, entries){
+  const existing=S.orders.filter(o=>o.visitId===v.id), keep=new Set();
+  for(const e of entries){
+    const c=S.customers.get(e.cid), ex=existing.find(o=>o.customerId===e.cid);
+    const row={order_no:e.orderNo||null,value:e.value>0?e.value:null,date:v.date};
+    let r;
+    if(ex){ keep.add(ex.id); r=await guard(sb.from("orders").update(row).eq("id",ex.id).select().single()); }
+    else r=await guard(sb.from("orders").insert(Object.assign({id:uuid(),visit_id:v.id,customer_id:e.cid,facility_id:c?c.facilityId:null,status:"confirmed",source:"manual",created_by:S.email},row)).select().single());
+    if(r){ putOrder(r); if(e.margin!=null&&S.isOwner) await saveMargin(r.id,e.margin); }
+  }
+  for(const ex of existing) if(!keep.has(ex.id)&&ex.source==="manual"){ const d=await guard(sb.from("orders").delete().eq("id",ex.id)); if(d) dropOrder(ex.id); }
+  refresh();
+}
+async function saveMargin(oid,pct){
+  const r=await guard(sb.from("order_costs").upsert({order_id:oid,margin_pct:pct}).select().single());
+  if(!r) return;
+  S.costs.set(oid,Number(r.margin_pct));
+  const o=S.orders.find(x=>x.id===oid), c=o&&S.customers.get(o.customerId); if(!c||!c.facilityId) return;
+  const k=facKey(c), t90=addDays(todayStr(),-90);
+  let sv=0,sm=0,n=0,sp=0;
+  for(const x of S.orders){ const cc=S.customers.get(x.customerId); if(!cc||facKey(cc)!==k||x.date<=t90||!S.costs.has(x.id)) continue; const m=S.costs.get(x.id); n++; sp+=m; if(x.value>0){ sv+=x.value; sm+=x.value*m; } }
+  if(!n) return;
+  const f=await guard(sb.from("facilities").update({margin_score:clamp((sv>0?sm/sv:sp/n)/S.cfg.marginGood*100)}).eq("id",c.facilityId).select().single());
+  if(f) putFac(f);
+}
+
+/* order sheet: edit a recorded order, or (manager) add a past one */
+function openOrder(id,opt){
+  const o=id?S.orders.find(x=>x.id===id):null; if(id&&!o) return;
+  const cid=o?o.customerId:(opt&&opt.cid), c=S.customers.get(cid)||{};
+  openSheet({
+    title:o?"تعديل طلبية":"إضافة طلبية سابقة", sub:esc(cname(c)+" · "+facOf(c).name),
+    body:'<div class="field"><label for="od-d">تاريخ الطلبية</label><input id="od-d" class="input" type="date" value="'+esc(o?o.date:"")+'" max="'+todayStr()+'"></div>'
+      +'<div class="field"><label for="od-n">رقم الطلبية في العمليات</label><input id="od-n" class="input" dir="ltr" value="'+esc(o&&o.orderNo||"")+'"></div>'
+      +'<div class="field"><label for="od-v">القيمة بالريال</label><input id="od-v" class="input" inputmode="decimal" dir="ltr" value="'+esc(o&&o.value>0?o.value:"")+'"></div>'
+      +(S.isOwner?'<div class="field"><label for="od-m">هامش الربح % (للمدير فقط)</label><input id="od-m" class="input" inputmode="decimal" dir="ltr" value="'+esc(o&&S.costs.has(o.id)?S.costs.get(o.id):"")+'"></div>':'')
+      +'<div class="err" id="od-err" hidden></div>',
+    foot:'<button class="btn primary" id="od-s">حفظ</button>'+(o&&S.isOwner?'<button class="btn danger" id="od-x">حذف الطلبية</button>':'')+'<button class="btn" data-act="close-sheet">إلغاء</button>',
+    mount(){
+      $("#od-s").addEventListener("click",async()=>{
+        const d=$("#od-d").value, no=$("#od-n").value.trim(), val=num($("#od-v").value), e=$("#od-err"), miss=[];
+        if(!d) miss.push("التاريخ"); if(!(val>0)) miss.push("القيمة"); if(!no) miss.push("رقم الطلبية");
+        if(miss.length){ e.textContent="أكمل: "+miss.join("، "); e.hidden=false; return; }
+        $("#od-s").disabled=true;
+        const row={date:d,order_no:no,value:val};
+        const r=o? await guard(sb.from("orders").update(row).eq("id",o.id).select().single(),"حُفظت الطلبية")
+                 : await guard(sb.from("orders").insert(Object.assign({id:uuid(),customer_id:cid,facility_id:c.facilityId||null,status:"confirmed",source:"manual",created_by:S.email},row)).select().single(),"أُضيفت الطلبية");
+        if(!r){ $("#od-s").disabled=false; return; }
+        putOrder(r);
+        const m=$("#od-m"); if(m&&m.value.trim()!=="") await saveMargin(r.id,num(m.value));
+        refresh(); closeSheet();
+      });
+      const x=$("#od-x"); if(x) x.addEventListener("click",async()=>{ const d=await guard(sb.from("orders").delete().eq("id",o.id),"حُذفت الطلبية"); if(d){ dropOrder(o.id); refresh(); closeSheet(); } });
+    }
+  });
+}
+/* manager: enter the margin for orders that have none, in one pass */
+function openMargins(){
+  const rows=S.orders.filter(o=>o.status!=="cancelled"&&!S.costs.has(o.id)).sort((a,b)=>a.date<b.date?1:-1).slice(0,30);
+  openSheet({
+    title:"هامش الربح للطلبيات", sub:"للمدير فقط. اترك الخانة فارغة لتجاوز الطلبية",
+    body:rows.length?rows.map(o=>{ const c=S.customers.get(o.customerId); return '<div class="field"><label for="mg-'+esc(o.id)+'">'+esc(dShort(o.date))+' · '+esc(c?cname(c):"—")+(o.value>0?' · '+o.value.toLocaleString("en-US")+' ر.س':'')+'</label><input class="input" id="mg-'+esc(o.id)+'" data-mg="'+esc(o.id)+'" inputmode="decimal" dir="ltr" placeholder="هامش الربح %"></div>'; }).join(""):'<div class="empty"><b>لا توجد طلبيات بلا هامش</b></div>',
+    foot:'<button class="btn primary" id="mg-s">حفظ</button><button class="btn" data-act="close-sheet">إغلاق</button>',
+    mount(root){ $("#mg-s").addEventListener("click",async()=>{ $("#mg-s").disabled=true; for(const i of root.querySelectorAll("[data-mg]")) if(i.value.trim()!=="") await saveMargin(i.dataset.mg,num(i.value)); refresh(); toast("حُفظت الهوامش"); closeSheet(); }); }
+  });
+}
+
+/* the visit guide: context + goal + talking points for this customer's stage */
+function openGuide(id){
+  const v=S.visitById.get(id); if(!v) return;
+  const c=S.customers.get(v.customerId)||{}, f=facOf(c), stg=STAGES[stageOf(v.customerId)], fm=fmOf(c);
+  const last=lastNoteFor(v.customerId,v.date), goals=stg.goals.concat(v.goal&&!stg.goals.includes(v.goal)?[v.goal]:[]);
+  let b='<div class="gstep"><b>'+esc(stg.label)+' '+tierChip(c)+' '+intChip(c)+'</b><div class="v-sub">'+esc([f.name,FT.has(ftName(f.type))?ftName(f.type):"",f.area].filter(Boolean).join(" · "))+(f.branches>1?" · "+f.branches+" فروع":"")+(f.fleet>0?" · أسطول "+f.fleet:"")+'</div></div>';
+  b+='<div class="field"><label for="gd-goal">هدف هذه الزيارة</label><select id="gd-goal" class="input">'+goals.map(g=>'<option'+(g===(v.goal||stg.goals[0])?" selected":"")+'>'+esc(g)+'</option>').join("")+'</select></div>';
+  if(last) b+='<div class="v-note"><span class="k">آخر ملاحظة · '+esc(dShort(last.date))+'</span>'+esc(last.notes)+(last.next&&last.next.text?"\nالخطوة المتفق عليها: "+esc(last.next.text):"")+'</div>';
+  if(fm&&fm.fading&&fm.gap&&fm.dso!=null) b+='<div class="v-note"><span class="k">تنبيه</span>كان يطلب كل '+fm.gap+' يوماً وقد مرّ '+fm.dso+' يوماً منذ آخر طلبية.</div>';
+  b+=stg.steps.map(s=>'<div class="gstep"><b>'+esc(s[0])+'</b><ul>'+s[1].map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul></div>').join("");
+  b+='<div class="gstep"><b>اسأله عن عمله</b><ul><li>'+esc(FAMILY_Q[famOf(f)])+'</li></ul></div>';
+  openSheet({
+    title:"مرشد الزيارة · "+esc(cname(c)), sub:esc(dLong(v.date)), body:b,
+    foot:'<button class="btn primary" data-act="result" data-id="'+esc(id)+'">سجّل النتيجة</button><button class="btn" data-act="close-sheet">إغلاق</button>',
+    mount(){ $("#gd-goal").addEventListener("change",async e=>{ await updateVisit(id,{goal:e.target.value},"حُفظ الهدف"); }); }
+  });
+}
+
 /* customer sheet */
 function openCustomer(id){
   const draw=()=>{
     const c=S.customers.get(id); if(!c) return null;
-    const d=S.der.get(id), lv=S.lastVisit.get(id);
-    const hist=S.visits.filter(v=>v.customerId===id).sort((a,b)=>a.date<b.date?1:-1);
+    const d=S.der.get(id), lv=S.lastVisit.get(id), f=facOf(c), fm=fmOf(c);
+    const hist=S.visits.filter(v=>v.customerId===id||(v.people||[]).some(p=>p.id===id)).sort((a,b)=>a.date<b.date?1:-1);
+    const mates=(S.facPeople.get(facKey(c))||[]).filter(x=>x.id!==id);
+    const ords=S.orders.filter(o=>o.customerId===id).sort((a,b)=>a.date<b.date?1:-1).slice(0,8);
+    const loc=f.location&&/^https?:\/\//.test(f.location)?'<a href="'+esc(f.location)+'" target="_blank" rel="noopener">فتح على الخريطة</a>':esc(f.location||"—");
     let h='<dl class="kv">'
-      +'<dt>الحالة</dt><dd>'+chipFor(id)+(d.status==="new"?' <span class="v-sub">متبقٍ '+d.toGo+' طلبية ليصبح حالياً</span>':'')+'</dd>'
-      +'<dt>المنصب</dt><dd>'+esc(c.title||"—")+'</dd><dt>الجهة</dt><dd>'+esc(c.org||"—")+'</dd>'
-      +'<dt>المنطقة</dt><dd>'+esc(c.area||"—")+'</dd><dt>النوع</dt><dd>'+esc(c.type||"—")+'</dd>'
+      +'<dt>الحالة</dt><dd>'+chipFor(id)+' '+tierChip(c)+' '+intChip(c)+(d.status==="new"?' <span class="v-sub">متبقٍ '+d.toGo+' طلبية ليصبح حالياً</span>':'')+'</dd>'
+      +'<dt>المنصب</dt><dd>'+esc(c.title||"—")+'</dd><dt>المنشأة</dt><dd>'+esc(f.name||"—")+'</dd>'
+      +'<dt>نوع المنشأة</dt><dd>'+esc(ftName(f.type))+'</dd><dt>المنطقة</dt><dd>'+esc(f.area||c.area||"—")+'</dd><dt>الموقع</dt><dd>'+loc+'</dd>'
+      +(f.branches>1||f.fleet>0?'<dt>الحجم</dt><dd>'+(f.branches>1?f.branches+' فروع':'')+(f.branches>1&&f.fleet>0?' · ':'')+(f.fleet>0?'أسطول '+f.fleet+' سيارة':'')+'</dd>':'')
       +'<dt>آخر زيارة</dt><dd>'+esc(lv?dShort(lv)+" · "+ago(lv):"لا يوجد")+'</dd>'
       +'<dt>الطلبيات</dt><dd class="num">'+d.count+(d.lastOrder?' · آخرها '+esc(dShort(d.lastOrder)):'')+'</dd>'
       +'<dt>الجوال</dt><dd>'+([c.phone,c.phone2].filter(Boolean).map(p=>'<div class="phone"><span>'+esc(p)+'</span><button class="btn sm ghost" data-act="copy" data-text="'+esc(p)+'">نسخ</button></div>').join("")||"—")+'</dd></dl>';
     if(c.note) h+='<div class="v-note"><span class="k">ملاحظة عامة</span>'+esc(c.note)+'</div>';
     if(c.phone) h+='<div class="row grow"><a class="btn" href="tel:'+esc(c.phone)+'">اتصال</a><a class="btn" href="'+esc(waLink(c.phone))+'" target="_blank" rel="noopener">واتساب</a></div>';
+    if(fm){
+      const A=fm.axes, ax=(lab,val)=>val==null?'':'<div class="axis"><span>'+lab+'</span><div class="bar"><i style="width:'+Math.round(val)+'%"></i></div><em>'+Math.round(val)+'</em></div>';
+      h+='<h2 class="sec">فئة المنشأة '+tierChip(c)+' <small>'+(fm.monthly>0?'متوسط الطلبات الشهرية ≈ '+Math.round(fm.monthly).toLocaleString("en-US")+' ر.س':'لا توجد قيم طلبيات بعد')+'</small></h2><div class="axes">'
+        +ax("قيمة الطلبات",A.value)+(S.isOwner?ax("هامش الربح",A.margin):"")+ax("النشاط",A.activity)+ax("حجم المنشأة",A.cap)+ax("الاهتمام",A.interest)+'</div>';
+    }
+    if(mates.length) h+='<h2 class="sec">أشخاص آخرون في المنشأة <small>'+mates.length+'</small></h2><div class="list">'+mates.map(m=>'<div class="ord"><span>'+esc(cname(m))+(m.title?' · '+esc(m.title):'')+'</span>'+chipFor(m.id)+'<button class="btn sm" data-act="cust" data-id="'+esc(m.id)+'">فتح</button></div>').join("")+'</div>';
+    h+='<h2 class="sec">الطلبيات <small>'+ords.length+'</small></h2>'+(ords.length?'<div class="list">'+ords.map(o=>orderRow(o)).join("")+'</div>':'<div class="v-sub">لا توجد طلبيات مسجّلة.</div>');
     h+='<h2 class="sec">سجل الزيارات <small>'+hist.length+'</small></h2>';
     h+= hist.length? '<div class="feed">'+hist.map(v=>visitCard(v,{showDate:true,noLink:true})).join("")+'</div>' : '<div class="empty"><b>لا توجد زيارات بعد</b>أضفه لخطة اليوم لتبدأ.</div>';
     return h;
@@ -942,9 +1567,12 @@ function openCustomer(id){
   const c=S.customers.get(id); if(!c) return;
   let label=null;
   openSheet({
-    title: esc(cname(c)), sub: esc(c.org||""),
+    title: esc(cname(c)), sub: esc(facOf(c).name||""),
     body:draw(),
-    foot:'<button class="btn primary" id="cs-plan"></button><button class="btn" data-act="edit-cust" data-id="'+esc(id)+'">تعديل البيانات</button>',
+    foot:'<button class="btn primary" id="cs-plan"></button><button class="btn" data-act="edit-cust" data-id="'+esc(id)+'">تعديل البيانات</button>'
+      +'<button class="btn" data-act="add-person" data-fid="'+esc(c.facilityId||"")+'">إضافة شخص من المنشأة</button>'
+      +(c.facilityId?'<button class="btn" data-act="edit-fac" data-fid="'+esc(c.facilityId)+'">تعديل المنشأة</button>':'')
+      +(S.isOwner?'<button class="btn" data-act="add-order" data-id="'+esc(id)+'">إضافة طلبية سابقة</button><button class="btn" data-act="toggle-imp" data-id="'+esc(id)+'">'+(c.important?"إلغاء تمييز العميل":"تمييز كعميل مهم ★")+'</button>':''),
     mount(root){
       const b=$("#cs-plan",root);
       label=()=>{const ex=visitFor(id,S.day); b.textContent= ex? (ex.state==="planned"?"في خطة "+dShort(S.day)+" ✓":"تمت زيارته "+dShort(S.day)) : "أضف لخطة "+(S.day===todayStr()?"اليوم":dShort(S.day)); b.disabled=!!(ex&&ex.state!=="planned");};
@@ -955,36 +1583,125 @@ function openCustomer(id){
   });
 }
 
-/* customer form */
-function openCustomerForm(id){
-  const c = id? S.customers.get(id) : {base:"new",type:"ورشة"};
-  if(!c) return;
+/* customer form: a person + the facility he belongs to; every field is mandatory except the second number, the map link and the note */
+function openCustomerForm(id, opt){
+  opt=opt||{};
+  const c0=id?S.customers.get(id):null; if(id&&!c0) return;
+  const f0=c0?facOf(c0):((opt.facilityId&&S.facilities.get(opt.facilityId))||{name:"",type:"ورشة صغيرة",area:"",location:"",branches:1,fleet:0});
+  const c=c0||{person:"",title:"",phone:"",phone2:"",note:"",base:"new"};
   const areas=[...new Set([...S.customers.values()].map(x=>x.area).filter(Boolean))];
-  const f=(k,label,attrs)=>'<div class="field"><label for="cf-'+k+'">'+label+'</label><input id="cf-'+k+'" class="input" value="'+esc(c[k]||"")+'" '+(attrs||"")+'></div>';
-  const body=f("person","اسم الشخص",'autocomplete="off"')+f("title","المنصب",'placeholder="فني صيانة، مدير الصيانة…"')+f("org","الجهة",'placeholder="اسم الورشة أو الشركة"')
-   +f("area","المنطقة",'list="cf-areas" placeholder="علي بن علي، أم الحمام…"')+'<datalist id="cf-areas">'+areas.map(a=>'<option value="'+esc(a)+'">').join("")+'</datalist>'
-   +f("phone","رقم الجوال",'inputmode="tel" dir="ltr" placeholder="05xxxxxxxx"')+f("phone2","رقم إضافي (اختياري)",'inputmode="tel" dir="ltr"')
-   +'<div class="field"><label for="cf-type">نوع الجهة</label><select id="cf-type" class="input">'+TYPES.map(t=>'<option'+(c.type===t?" selected":"")+'>'+t+'</option>').join("")+'</select></div>'
-   +'<div class="field"><label for="cf-base">الحالة الأساسية</label><select id="cf-base" class="input">'
-   +[["new","جديد"],["current","حالي"],["lapsed","سابق"]].map(o=>'<option value="'+o[0]+'"'+(c.base===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select><span class="help">تتغير الحالة تلقائياً بعد ذلك حسب الطلبيات المسجّلة.</span></div>'
+  const f=(k,label,val,attrs)=>'<div class="field"><label for="cf-'+k+'">'+label+'</label><input id="cf-'+k+'" class="input" value="'+esc(val==null?"":val)+'" '+(attrs||"")+'></div>';
+  const body='<p class="sub-h">بيانات الشخص</p>'
+   +f("person","اسم الشخص",c.person,'autocomplete="off"')+f("title","المنصب",c.title,'placeholder="فني صيانة، مدير الصيانة، مدير المشتريات…"')
+   +f("phone","رقم الجوال",c.phone,'inputmode="tel" dir="ltr" placeholder="05xxxxxxxx"')+f("phone2","رقم إضافي (اختياري)",c.phone2,'inputmode="tel" dir="ltr"')
+   +'<div class="field"><label for="cf-base">الحالة الأساسية</label><select id="cf-base" class="input">'+[["new","جديد"],["current","حالي"],["lapsed","سابق"]].map(o=>'<option value="'+o[0]+'"'+(c.base===o[0]?" selected":"")+'>'+o[1]+'</option>').join("")+'</select><span class="help">تتغير الحالة تلقائياً بعد ذلك حسب الطلبيات المسجّلة.</span></div>'
+   +'<p class="sub-h">بيانات المنشأة</p>'
+   +f("fname","اسم المنشأة",f0.name,'list="cf-facs" placeholder="اسم الورشة أو الشركة"')+'<datalist id="cf-facs">'+[...S.facilities.values()].map(x=>'<option value="'+esc(x.name)+'">').join("")+'</datalist><span class="help" id="cf-fhelp"></span>'
+   +'<div class="field"><label for="cf-ftype">نوع المنشأة</label><select id="cf-ftype" class="input">'+FTYPES.map(t=>'<option'+(ftName(f0.type)===t[0]?" selected":"")+'>'+t[0]+'</option>').join("")+'</select></div>'
+   +f("area","المنطقة",f0.area,'list="cf-areas" placeholder="علي بن علي، أم الحمام…"')+'<datalist id="cf-areas">'+areas.map(a=>'<option value="'+esc(a)+'">').join("")+'</datalist>'
+   +f("location","الموقع على الخريطة (اختياري)",f0.location,'dir="ltr" placeholder="رابط Google Maps"')
+   +'<div class="row grow">'+f("branches","عدد الفروع",f0.branches,'type="number" min="1" inputmode="numeric"')+f("fleet","حجم الأسطول (سيارات)",f0.fleet,'type="number" min="0" inputmode="numeric"')+'</div>'
    +'<div class="field"><label for="cf-note">ملاحظة عامة</label><textarea id="cf-note" class="input" placeholder="أي معلومة ثابتة عن العميل">'+esc(c.note||"")+'</textarea></div><div class="err" id="cf-err" hidden></div>';
   openSheet({
     title: id? "تعديل بيانات العميل":"عميل جديد", body,
     foot:'<button class="btn primary" id="cf-save">حفظ</button><button class="btn" data-act="close-sheet">إلغاء</button>',
     mount(){
+      const findFac=n=>[...S.facilities.values()].find(x=>normName(x.name)===normName(n));
+      $("#cf-fname").addEventListener("input",()=>{
+        const x=findFac($("#cf-fname").value), h=$("#cf-fhelp");
+        if(x){ $("#cf-ftype").value=ftName(x.type); $("#cf-area").value=x.area; $("#cf-location").value=x.location; $("#cf-branches").value=x.branches; $("#cf-fleet").value=x.fleet; h.textContent="منشأة موجودة، ستُضاف هذا الشخص إليها."; } else h.textContent="";
+      });
       $("#cf-save").addEventListener("click",async()=>{
-        const g=k=>$("#cf-"+k).value.trim();
-        const data={person:g("person"),title:g("title"),org:g("org"),area:g("area"),phone:g("phone").replace(/\s/g,""),phone2:g("phone2").replace(/\s/g,""),type:$("#cf-type").value,note:g("note")};
+        const g=k=>$("#cf-"+k).value.trim(), e=$("#cf-err"), miss=[];
+        document.querySelectorAll("#sh-body .bad").forEach(x=>x.classList.remove("bad"));
+        const need=(k,label,ok)=>{ if(!ok){ miss.push(label); $("#cf-"+k).classList.add("bad"); } };
+        const phone=normPhone(g("phone")), phone2=normPhone(g("phone2"));
+        need("person","اسم الشخص",g("person").length>=2); need("title","المنصب",g("title").length>=2); need("fname","اسم المنشأة",g("fname").length>=2);
+        need("area","المنطقة",g("area").length>=2); need("phone","رقم جوال صحيح (05xxxxxxxx)",phoneOk(phone));
+        if(g("phone2")&&!phoneOk(phone2)) need("phone2","الرقم الإضافي غير صحيح",false);
+        const dup=phoneOk(phone)&&[...S.customers.values()].find(x=>x.id!==id&&normPhone(x.phone)===phone);
+        if(dup){ miss.push("هذا الرقم مسجّل للعميل "+cname(dup)); $("#cf-phone").classList.add("bad"); }
+        if(miss.length){ e.innerHTML='<b>أكمل ما يلي قبل الحفظ:</b><ul style="margin:4px 0 0;padding-inline-start:18px">'+miss.map(m=>'<li>'+esc(m)+'</li>').join("")+'</ul>'; e.hidden=false; return; }
+        e.hidden=true; $("#cf-save").disabled=true;
+        const fd={name:g("fname"),type:$("#cf-ftype").value,area:g("area"),location:g("location"),branches:Math.max(1,Math.round(num($("#cf-branches").value))||1),fleet:Math.max(0,Math.round(num($("#cf-fleet").value))||0)};
+        let fac=findFac(fd.name), fid;
+        if(fac){
+          fid=fac.id;
+          if(fac.type!==fd.type||fac.area!==fd.area||fac.location!==fd.location||fac.branches!==fd.branches||fac.fleet!==fd.fleet){ const u=await guard(sb.from("facilities").update(fd).eq("id",fid).select().single()); if(u) putFac(u); }
+        } else if(c0&&c0.facilityId&&(S.facPeople.get(facKey(c0))||[]).length===1){
+          fid=c0.facilityId; const u=await guard(sb.from("facilities").update(fd).eq("id",fid).select().single()); if(!u){ $("#cf-save").disabled=false; return; } putFac(u);
+        } else {
+          fid="f_"+uuid().replace(/-/g,"").slice(0,16);
+          const u=await guard(sb.from("facilities").insert(Object.assign({id:fid,created_by:S.email},fd)).select().single()); if(!u){ $("#cf-save").disabled=false; return; } putFac(u);
+        }
+        const data={person:g("person"),title:g("title"),org:fd.name,area:fd.area,phone,phone2:phone2||"",type:fd.type,note:g("note"),facility_id:fid};
         const base=$("#cf-base").value;
-        if(!data.person && !data.org){ const e=$("#cf-err"); e.textContent="اكتب اسم الشخص أو الجهة على الأقل."; e.hidden=false; return; }
-        $("#cf-save").disabled=true;
         let r;
-        if(id){ if(base!==c.base){data.base=base;data.since=todayStr();} r=await guard(sb.from("customers").update(data).eq("id",id).select().single(),"حُفظت التعديلات"); }
+        if(id){ if(base!==c0.base){ data.base=base; data.since=todayStr(); } r=await guard(sb.from("customers").update(data).eq("id",id).select().single(),"حُفظت التعديلات"); }
         else r=await guard(sb.from("customers").insert(Object.assign(data,{id:uuid(),base,since:todayStr(),created_by:S.email})).select().single(),"أُضيف العميل");
         if(r){ putCust(r); refresh(); if(id) openCustomer(id); else closeSheet(); } else $("#cf-save").disabled=false;
       });
     }
   });
+}
+
+/* facility form */
+function openFacility(fid){
+  const f=S.facilities.get(fid); if(!f) return;
+  const inp=(k,label,val,attrs)=>'<div class="field"><label for="ff-'+k+'">'+label+'</label><input id="ff-'+k+'" class="input" value="'+esc(val==null?"":val)+'" '+(attrs||"")+'></div>';
+  openSheet({
+    title:"تعديل المنشأة", sub:esc(f.name),
+    body:inp("name","اسم المنشأة",f.name)
+     +'<div class="field"><label for="ff-type">نوع المنشأة</label><select id="ff-type" class="input">'+FTYPES.map(t=>'<option'+(ftName(f.type)===t[0]?" selected":"")+'>'+t[0]+'</option>').join("")+'</select></div>'
+     +inp("area","المنطقة",f.area)+inp("location","الموقع على الخريطة (اختياري)",f.location,'dir="ltr"')
+     +'<div class="row grow">'+inp("branches","عدد الفروع",f.branches,'type="number" min="1"')+inp("fleet","حجم الأسطول",f.fleet,'type="number" min="0"')+'</div>'
+     +'<div class="field"><label for="ff-note">ملاحظة</label><textarea id="ff-note" class="input">'+esc(f.note||"")+'</textarea></div><div class="err" id="ff-err" hidden></div>',
+    foot:'<button class="btn primary" id="ff-s">حفظ</button><button class="btn" data-act="close-sheet">إلغاء</button>',
+    mount(){ $("#ff-s").addEventListener("click",async()=>{
+      const g=k=>$("#ff-"+k).value.trim(), e=$("#ff-err");
+      const fd={name:g("name"),type:$("#ff-type").value,area:g("area"),location:g("location"),branches:Math.max(1,Math.round(num($("#ff-branches").value))||1),fleet:Math.max(0,Math.round(num($("#ff-fleet").value))||0),note:g("note")};
+      if(fd.name.length<2||fd.area.length<2){ e.textContent="اسم المنشأة والمنطقة إلزاميان."; e.hidden=false; return; }
+      const other=[...S.facilities.values()].find(x=>x.id!==fid&&normName(x.name)===normName(fd.name));
+      if(other){ e.textContent="توجد منشأة أخرى بنفس الاسم. استخدم «جودة البيانات» لدمجهما."; e.hidden=false; return; }
+      $("#ff-s").disabled=true;
+      const r=await guard(sb.from("facilities").update(fd).eq("id",fid).select().single(),"حُفظت المنشأة");
+      if(!r){ $("#ff-s").disabled=false; return; }
+      putFac(r);
+      const cs=await guard(sb.from("customers").update({org:fd.name,area:fd.area,type:fd.type}).eq("facility_id",fid).select());
+      if(cs&&cs.forEach) cs.forEach(putCust);
+      refresh(); closeSheet();
+    }); }
+  });
+}
+
+/* data quality: what is missing, duplicate numbers, facilities that look the same */
+function openQuality(){
+  const draw=()=>{
+    const bad=[...S.customers.values()].map(c=>({c,m:custIssues(c)})).filter(x=>x.m.length);
+    const byPhone=new Map(); for(const c of S.customers.values()){ const p=normPhone(c.phone); if(!phoneOk(p)) continue; if(!byPhone.has(p)) byPhone.set(p,[]); byPhone.get(p).push(c); }
+    const dups=[...byPhone.values()].filter(a=>a.length>1);
+    const byName=new Map(); for(const f of S.facilities.values()){ const k=normName(f.name); if(!k) continue; if(!byName.has(k)) byName.set(k,[]); byName.get(k).push(f); }
+    const sim=[...byName.values()].filter(a=>a.length>1);
+    const inc=incompleteOrders();
+    let h='';
+    h+='<h2 class="sec">بيانات عملاء ناقصة <small>'+bad.length+'</small></h2>'+(bad.length?bad.map(x=>'<div class="issue"><div>'+esc(cname(x.c))+' · '+esc(facOf(x.c).name||"بلا منشأة")+'<small>ينقص: '+esc(x.m.join("، "))+'</small></div><button class="btn sm primary" data-act="edit-cust" data-id="'+esc(x.c.id)+'">استكمل</button></div>').join(""):'<div class="v-sub">كل العملاء مكتملون.</div>');
+    h+='<h2 class="sec">أرقام جوال مكررة <small>'+dups.length+'</small></h2>'+(dups.length?dups.map(a=>'<div class="issue"><div>'+esc(normPhone(a[0].phone))+'<small>'+esc(a.map(cname).join("، "))+'</small></div><button class="btn sm" data-act="cust" data-id="'+esc(a[0].id)+'">فتح</button></div>').join(""):'<div class="v-sub">لا توجد أرقام مكررة.</div>');
+    h+='<h2 class="sec">منشآت بنفس الاسم <small>'+sim.length+'</small></h2>'+(sim.length?sim.map(a=>'<div class="issue"><div>'+esc(a[0].name)+'<small>'+a.length+' سجلات لنفس المنشأة</small></div>'+(S.isOwner?'<button class="btn sm primary" data-act="merge-fac" data-ids="'+esc(a.map(x=>x.id).join("|"))+'">ادمجها</button>':'')+'</div>').join(""):'<div class="v-sub">لا توجد منشآت مكررة.</div>');
+    h+='<h2 class="sec">طلبيات بلا رقم أو قيمة <small>'+inc.length+'</small></h2>'+(inc.length?'<div class="list">'+inc.slice(0,15).map(o=>orderRow(o)).join("")+'</div>':'<div class="v-sub">كل الطلبيات مكتملة.</div>');
+    return h;
+  };
+  openSheet({ title:"جودة البيانات", sub:"أكمل الناقص ليعمل التطبيق بذكاء أعلى", body:draw(), foot:'<button class="btn" data-act="close-sheet">إغلاق</button>',
+    onUpdate(){ const b=$("#sh-body"); if(b) b.innerHTML=draw(); } });
+}
+async function mergeFacilities(ids){
+  const keep=ids[0], rest=ids.slice(1);
+  for(const x of rest){
+    const cs=await guard(sb.from("customers").update({facility_id:keep}).eq("facility_id",x).select()); if(!cs) return;
+    cs.forEach(putCust);
+    const os=await guard(sb.from("orders").update({facility_id:keep}).eq("facility_id",x).select()); if(os&&os.forEach) os.forEach(putOrder);
+    const d=await guard(sb.from("facilities").delete().eq("id",x)); if(d) S.facilities.delete(x);
+  }
+  toast("تم دمج المنشآت"); refresh();
 }
 
 /* coach note (manager) */
@@ -1002,7 +1719,7 @@ function openCoach(id){
 /* plan settings (manager) */
 function openSettings(){
   const c=S.cfg;
-  const F=[["dailyTarget","الزيارات اليومية المستهدفة"],["weeklyNew","زيارات العملاء الجدد أسبوعياً"],["weeklyOrders","الطلبيات الناجحة أسبوعياً"],["monthlyConv","تحويل جدد إلى حاليين شهرياً"],["ordersToConvert","عدد الطلبيات ليصبح الجديد حالياً"],["lapsedDays","يصبح الحالي سابقاً بعد (يوم بلا طلبية)"],["planStartCount","عدد الحاليين في بداية الخطة"]];
+  const F=[["dailyTarget","الزيارات اليومية المستهدفة"],["weeklyNew","زيارات العملاء الجدد أسبوعياً"],["weeklyOrders","الطلبيات الناجحة أسبوعياً"],["monthlyConv","تحويل جدد إلى حاليين شهرياً"],["ordersToConvert","عدد الطلبيات ليصبح الجديد حالياً"],["lapsedDays","يصبح الحالي سابقاً بعد (يوم بلا طلبية)"],["planStartCount","عدد الحاليين في بداية الخطة"],["valueGood","قيمة الطلبات الشهرية للمنشأة التي تعتبر ممتازة (ريال)"],["activityGood","عدد الطلبيات في 90 يوماً الذي يعتبر ممتازاً"],["marginGood","هامش الربح % الذي يعتبر ممتازاً"]];
   openSheet({
     title:"أهداف الخطة", sub:"تُطبّق فوراً على التطبيق عند الجميع",
     body:F.map(f=>'<div class="field"><label for="st-'+f[0]+'">'+f[1]+'</label><input id="st-'+f[0]+'" class="input num" type="number" min="1" inputmode="numeric" value="'+esc(c[f[0]])+'"></div>').join("")
@@ -1035,6 +1752,19 @@ document.addEventListener("click",async e=>{
   if(a==="new-cust") return openCustomerForm(null);
   if(a==="edit-cust") return openCustomerForm(id);
   if(a==="coach") return openCoach(id);
+  if(a==="open-suggest") return openSuggest();
+  if(a==="carry-move"){ b.disabled=true; const n=await addPlanned(S.day,carryItems(S.day)); if(n) toast("رُحّلت "+n+" زيارات إلى اليوم"); return; }
+  if(a==="carry-drop"){ b.disabled=true; const ids=carryItems(S.day).map(x=>x.carryVisit.id); const up=await guard(sb.from("visits").update({state:"missed"}).in("id",ids).select(),"تم تجاهلها وسُجّلت كزيارات لم تتم"); if(up&&up.forEach){ up.forEach(putVisit); refresh(); } return; }
+  if(a==="toggle-imp"){ const c=S.customers.get(id); if(!c) return; const r=await guard(sb.from("customers").update({important:!c.important}).eq("id",id).select().single(),c.important?"أُلغي التمييز":"مُيّز كعميل مهم"); if(r){ putCust(r); refresh(); openCustomer(id); } return; }
+  if(a==="guide") return openGuide(id);
+  if(a==="prio-add"){ b.disabled=true; await createVisit(id,S.day); return; }
+  if(a==="open-quality") return openQuality();
+  if(a==="edit-order") return openOrder(id);
+  if(a==="add-order") return openOrder(null,{cid:id});
+  if(a==="margins") return openMargins();
+  if(a==="add-person") return openCustomerForm(null,{facilityId:b.dataset.fid||null});
+  if(a==="edit-fac") return openFacility(b.dataset.fid);
+  if(a==="merge-fac"){ b.disabled=true; await mergeFacilities(b.dataset.ids.split("|")); return; }
   if(a==="settings") return openSettings();
   if(a==="filter"){ S.filter=b.dataset.f; return updateCustomers(); }
   if(a==="copy"){ const t=b.dataset.text; try{ await navigator.clipboard.writeText(t); toast("نُسخ الرقم "+t); }catch(err){ toast("الرقم: "+t); } }

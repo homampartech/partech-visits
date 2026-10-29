@@ -1,5 +1,5 @@
-/* Offline shell for زيارات بارتك. Data requests to Supabase always go to the network. */
-const CACHE = "ptv-v1";
+/* Offline shell for Ø²ÙŠØ§Ø±Ø§Øª Ø¨Ø§Ø±ØªÙƒ. Data requests to Supabase always go to the network. */
+const CACHE = "ptv-v3";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -38,3 +38,4 @@ self.addEventListener("fetch", e => {
     }))
   );
 });
+
