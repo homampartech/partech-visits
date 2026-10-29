@@ -808,7 +808,7 @@ async function fetchAllVisits(){
   }
   return out;
 }
-async function loadAll(){
+async function loadAll(retried){
   try{
     const [c,cfg,team,visits,fac,ord,cost,qts,msgs] = await Promise.all([
       sb.from("customers").select("*"),
@@ -836,7 +836,8 @@ async function loadAll(){
     return true;
   }catch(e){
     console.error(e);
-    if(/JWT|session|token/i.test(String(e.message))) { await sb.auth.signOut(); return false; }
+    /* an expired/rotating token is not a reason to sign out: refresh and retry once. The library itself fires SIGNED_OUT only if the refresh token is really invalid. */
+    if(!retried && /JWT|session|token/i.test(String(e.message))){ try{ const r=await sb.auth.refreshSession(); if(r&&r.data&&r.data.session) return loadAll(true); }catch(err){} }
     $("#view").innerHTML='<div class="notice"><b>تعذّر تحميل البيانات.</b><br>تحقق من الاتصال بالإنترنت ثم أعد المحاولة.</div><button class="btn primary" data-act="reload">إعادة المحاولة</button>';
     return false;
   }
@@ -2010,7 +2011,7 @@ document.addEventListener("click",async e=>{
   const a=b.dataset.act, id=b.dataset.id;
   if(a==="tab") return setTab(b.dataset.tab);
   if(a==="close-sheet") return closeSheet();
-  if(a==="logout"){ await sb.auth.signOut(); return showLogin(); }
+  if(a==="logout"){ await sb.auth.signOut({scope:"local"}); return showLogin(); }
   if(a==="reload") return location.reload();
   if(a==="install"){ if(installEvt){ installEvt.prompt(); try{ await installEvt.userChoice; }catch(err){} installEvt=null; document.querySelectorAll("[data-install]").forEach(x=>x.hidden=true); } return; }
   if(a==="day-prev"){ S.day=addDays(S.day,-1); return renderView(); }
