@@ -319,7 +319,8 @@ const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
 "use strict";
 
 /* ---------- constants ---------- */
-const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:5000, activityGood:12, marginGood:20};
+const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:5000, activityGood:12, marginGood:20, dailyQuotes:10, dailyWins:3, workDaysMonth:26};
+const LOST_WHY = ["السعر مرتفع","اشترى من مورد آخر","لا يحتاج حالياً","تأخّرنا في الرد","القطعة غير متوفرة","أخرى"];
 const ST = {current:"حالي", lapsed:"سابق", new:"جديد"};
 const PURPOSE = {order:"أخذ طلبية", intro:"تعريف ببارتك", followup:"متابعة", recover:"استرجاع العميل", collect:"تحصيل / تسليم"};
 const RESULT = {order:"طلبية ✓", interested:"مهتم - يحتاج متابعة", notnow:"غير مهتم حالياً", absent:"لم يتواجد"};
@@ -373,7 +374,7 @@ const S = {
   email:null, me:null, team:new Map(), isOwner:false,
   customers:new Map(), visits:[], visitById:new Map(), cfg:{...DEF},
   der:new Map(), lastVisit:new Map(),
-  facilities:new Map(), orders:[], costs:new Map(), facM:new Map(), facPeople:new Map(), events:[],
+  quotes:[], facilities:new Map(), orders:[], costs:new Map(), facM:new Map(), facPeople:new Map(), events:[],
   loaded:false, tab:"today", mounted:null,
   day:todayStr(), filter:"all", q:"", sheet:null
 };
@@ -450,6 +451,8 @@ function rowToCust(r){return {id:r.id, person:r.person||"", title:r.title||"", o
 function rowToVisit(r){return {id:r.id, customerId:r.customer_id, date:r.date, time:r.time||"", kind:r.kind||"", purpose:r.purpose||"", state:r.state, result:r.result||"", channel:r.channel||"visit", notes:r.notes||"", next:{text:r.next_text||"", date:r.next_date||""}, checks:r.checks||{}, coach:{text:r.coach_text||"", at:r.coach_at}, by:r.by_email, doneBy:r.done_by, doneAt:r.done_at||"", createdAt:r.created_at||"", unplanned:!!r.unplanned, goal:r.goal||"", goalMet:r.goal_met||"", reason:r.reason||"", people:Array.isArray(r.people)?r.people:[]};}
 function rowToFac(r){return {id:r.id, name:r.name||"", type:r.type||"أخرى", area:r.area||"", location:r.location||"", branches:r.branches==null?1:Number(r.branches), fleet:Number(r.fleet||0), note:r.note||"", marginScore:r.margin_score==null?null:Number(r.margin_score)};}
 function rowToOrder(r){return {id:r.id, visitId:r.visit_id||null, customerId:r.customer_id||null, facilityId:r.facility_id||null, date:r.date, orderNo:r.order_no||"", value:r.value==null?null:Number(r.value), status:r.status||"confirmed", source:r.source||"manual"};}
+function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", by:r.created_by};}
+function putQuote(r){ const q=rowToQuote(r); const i=S.quotes.findIndex(x=>x.id===q.id); if(i>=0) S.quotes[i]=q; else S.quotes.push(q); }
 function putFac(r){ S.facilities.set(r.id,rowToFac(r)); }
 function putOrder(r){ const o=rowToOrder(r); const i=S.orders.findIndex(x=>x.id===o.id); if(i>=0) S.orders[i]=o; else S.orders.push(o); }
 function dropOrder(id){ S.orders=S.orders.filter(x=>x.id!==id); S.costs.delete(id); }
@@ -798,15 +801,17 @@ async function fetchAllVisits(){
 }
 async function loadAll(){
   try{
-    const [c,cfg,team,visits,fac,ord,cost] = await Promise.all([
+    const [c,cfg,team,visits,fac,ord,cost,qts] = await Promise.all([
       sb.from("customers").select("*"),
       sb.from("config").select("data").eq("id",1).maybeSingle(),
       sb.from("team").select("*"),
       fetchAllVisits(),
       sb.from("facilities").select("*"),
       sb.from("orders").select("*"),
-      sb.from("order_costs").select("*")
+      sb.from("order_costs").select("*"),
+      sb.from("quotes").select("*")
     ]);
+    S.quotes = ((qts.error?[]:qts.data)||[]).map(rowToQuote);
     if(c.error) throw c.error; if(team.error) throw team.error;
     if(fac.error||ord.error) throw (fac.error||ord.error);
     S.facilities = new Map(fac.data.map(r=>[r.id,rowToFac(r)]));
@@ -831,6 +836,7 @@ function subscribe(){
     .on("postgres_changes",{event:"*",schema:"public",table:"visits"},p=>{ if(p.eventType==="DELETE") dropVisit(p.old.id); else putVisit(p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"customers"},p=>{ if(p.eventType==="DELETE") S.customers.delete(p.old.id); else putCust(p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"facilities"},p=>{ if(p.eventType==="DELETE") S.facilities.delete(p.old.id); else putFac(p.new); scheduleRefresh(); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"quotes"},p=>{ if(p.eventType==="DELETE") S.quotes=S.quotes.filter(x=>x.id!==p.old.id); else putQuote(p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"orders"},p=>{ if(p.eventType==="DELETE") dropOrder(p.old.id); else putOrder(p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"order_costs"},p=>{ if(p.eventType==="DELETE") S.costs.delete(p.old.order_id); else S.costs.set(p.new.order_id,Number(p.new.margin_pct)); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"config"},p=>{ if(p.new&&p.new.data){ S.cfg=Object.assign({},DEF,p.new.data); scheduleRefresh(); } })
@@ -911,6 +917,7 @@ function todayHTML(){
       +'<div class="row grow"><button class="btn sm primary" data-act="carry-move">رحّلها لليوم</button><button class="btn sm" data-act="carry-drop">تجاهلها</button></div></section>';
   }
   if(day===t && dow(day)!==5) h+=prioHTML(day);
+  if(dow(day)!==5||day===t) h+=quotesHTML(day);
   if(day===t) h+=qualityBanner();
   if(isFri && !list.length) h+='<div class="empty"><b>الجمعة يوم راحة</b>لا توجد زيارات مخططة.</div>';
   else if(!list.length) h+='<div class="empty"><b>لا توجد زيارات مخططة لهذا اليوم</b>ابدأ يومك بالتخطيط: اختر '+cfg.dailyTarget+' عملاء من القاعدة، بحيث تبدأ بالحاليين المستحقين للزيارة، ثم السابقين، ثم الجدد.</div>';
@@ -935,6 +942,12 @@ function dailyPriorities(day){
     else if(d.status==="lapsed"&&fm&&fm.tier!=="C"){ u=70; why="عميل سابق فئة "+fm.tier+(d.lastOrder?" · آخر طلبية قبل "+diff(d.lastOrder,day)+" يوماً":""); }
     else continue;
     const k=facKey(c), o=best.get(k); if(!o||u>o.u) best.set(k,{u,why,c,planned:!!dv});
+  }
+  for(const q of S.quotes){
+    if(q.status!=="open") continue; const age=diff(q.date,day); if(age<2) continue;
+    const c=S.customers.get(q.customerId); if(!c) continue;
+    const k=facKey(c), o=best.get(k), dv=visitFor(c.id,day), u=92+Math.min(age,6);
+    if(!o||u>o.u) best.set(k,{u,why:"عرض سعر مفتوح منذ "+plural(age,P_DAY)+": "+shorten(q.item,30)+" · تابعه قبل أن يشتري من غيرك",c,planned:!!dv});
   }
   return [...best.values()].sort((a,b)=>b.u-a.u).slice(0,3);
 }
@@ -1082,6 +1095,7 @@ function dashHTML(){
    +kpi("زيارات بخطوة قادمة محددة",q.next,100,{pct:1})
    +kpi("زيارات ميدانية بدل الاتصال",q.field,100,{pct:1,hint:"الزيارة الميدانية مفضّلة على الاتصال"})
    +'</section>';
+  h+=dashQuotes(t);
   h+=dashAccounts(t);
   h+='<section class="card"><h3>قاعدة العملاء</h3><div class="tiles">'
    +'<div class="tile"><b>'+cur.length+'</b><span>حالي</span></div><div class="tile"><b>'+lap.length+'</b><span>سابق (آخر طلبية قبل '+cfg.lapsedDays+' يوماً أو أكثر)</span></div>'
@@ -1092,6 +1106,21 @@ function dashHTML(){
    +'</section>';
   if(S.isOwner) h+='<button class="btn" data-act="settings">'+ICON.gear.replace("<svg",'<svg width="18" height="18"')+'أهداف الخطة</button>';
   return h;
+}
+/* quotes: day / week / month against the targets (26 working days a month, Friday off) */
+function dashQuotes(t){
+  const cfg=S.cfg, st=quoteStats(t), mk=monthKey(t), ms=mk+"-01";
+  let el=0; for(let d=ms;d<=t;d=addDays(d,1)) if(dow(d)!==5) el++;
+  const pace=Math.min(1,el/cfg.workDaysMonth), mq=cfg.dailyQuotes*cfg.workDaysMonth, mw=cfg.dailyWins*cfg.workDaysMonth;
+  const rate=st.month.n?Math.round(st.month.w/st.month.n*100):0, tr=Math.round(cfg.dailyWins/cfg.dailyQuotes*100);
+  const lost=new Map(); S.quotes.filter(q=>q.status==="lost"&&q.date>=addDays(t,-60)).forEach(q=>lost.set(q.lostReason||"أخرى",(lost.get(q.lostReason||"أخرى")||0)+1));
+  return '<section class="card"><h3>التسعير والإغلاق <small>'+cfg.dailyQuotes+' طلبات يومياً، وإغلاق '+cfg.dailyWins+'</small></h3>'
+   +kpi("طلبات التسعير اليوم",st.day.n,cfg.dailyQuotes)+kpi("إغلاقات اليوم",st.day.w,cfg.dailyWins)
+   +kpi("طلبات التسعير هذا الأسبوع",st.week.n,cfg.dailyQuotes*6)+kpi("إغلاقات هذا الأسبوع",st.week.w,cfg.dailyWins*6)
+   +kpi("طلبات التسعير هذا الشهر",st.month.n,mq,{pace,hint:cfg.workDaysMonth+" يوم عمل في الشهر"})+kpi("إغلاقات هذا الشهر",st.month.w,mw,{pace})
+   +kpi("نسبة الإغلاق هذا الشهر",rate,tr,{pct:1,hint:"الهدف: إغلاق "+cfg.dailyWins+" من كل "+cfg.dailyQuotes+" طلبات"})
+   +(lost.size?'<div class="hint v-sub">أسباب عدم الإغلاق: '+[...lost].sort((a,b)=>b[1]-a[1]).map(x=>esc(x[0])+" ("+x[1]+")").join("، ")+'</div>':'')
+   +'</section>';
 }
 /* tiers, fading accounts, stop reasons and incomplete orders */
 function dashAccounts(t){
@@ -1149,6 +1178,7 @@ function guideHTML(){
   return '<div class="guide list">'
   +'<div class="card"><h3>الخطة باختصار</h3><div style="font-size:14px;display:flex;flex-direction:column;gap:6px">'
   +'<div><b>'+S.cfg.dailyTarget+' زيارات كل يوم</b> بين حاليين وسابقين وجدد، وزيارة واحدة أسبوعياً لكل عميل حالي.</div>'
+  +'<div><b>'+S.cfg.dailyQuotes+' طلبات تسعير يومياً</b> من عملائك وإغلاق <b>'+S.cfg.dailyWins+'</b> منها على الأقل (نحو '+S.cfg.workDaysMonth+' يوم عمل في الشهر، والجمعة إجازة). سجّل كل طلب سعر من تبويب «اليوم»، وأغلقه بطلبية أو سجّل سبب عدم الإغلاق.</div>'
   +'<div><b>'+S.cfg.weeklyNew+' زيارة أسبوعياً لعملاء جدد</b>، والهدف تحويل '+S.cfg.monthlyConv+' منهم إلى حاليين كل شهر.</div>'
   +'<div><b>الجديد يصبح حالياً</b> بعد '+S.cfg.ordersToConvert+' طلبيات. <b>الحالي يصبح سابقاً</b> إذا مر '+S.cfg.lapsedDays+' يوماً على آخر طلبية. <b>السابق يعود حالياً</b> بأول طلبية جديدة.</div></div></div>'
   +'<details open><summary>روتين يومك</summary><div class="gb"><ol>'
@@ -1570,6 +1600,7 @@ function openCustomer(id){
     title: esc(cname(c)), sub: esc(facOf(c).name||""),
     body:draw(),
     foot:'<button class="btn primary" id="cs-plan"></button><button class="btn" data-act="edit-cust" data-id="'+esc(id)+'">تعديل البيانات</button>'
+      +'<button class="btn" data-act="new-quote" data-id="'+esc(id)+'">طلب تسعير</button>'
       +'<button class="btn" data-act="add-person" data-fid="'+esc(c.facilityId||"")+'">إضافة شخص من المنشأة</button>'
       +(c.facilityId?'<button class="btn" data-act="edit-fac" data-fid="'+esc(c.facilityId)+'">تعديل المنشأة</button>':'')
       +(S.isOwner?'<button class="btn" data-act="add-order" data-id="'+esc(id)+'">إضافة طلبية سابقة</button><button class="btn" data-act="toggle-imp" data-id="'+esc(id)+'">'+(c.important?"إلغاء تمييز العميل":"تمييز كعميل مهم ★")+'</button>':''),
@@ -1704,6 +1735,82 @@ async function mergeFacilities(ids){
   toast("تم دمج المنشآت"); refresh();
 }
 
+/* ---------- QUOTES: price requests per day and how many close ---------- */
+function qDate(q){ return q.closedAt?ymd(new Date(q.closedAt)):""; }
+function quoteStats(day){
+  const q=S.quotes, ws=weekStart(day), we=addDays(ws,6), mk=monthKey(day), won=x=>x.status==="won";
+  return {
+    day:{n:q.filter(x=>x.date===day).length, w:q.filter(x=>won(x)&&qDate(x)===day).length},
+    week:{n:q.filter(x=>x.date>=ws&&x.date<=we).length, w:q.filter(x=>won(x)&&qDate(x)>=ws&&qDate(x)<=we).length},
+    month:{n:q.filter(x=>monthKey(x.date)===mk).length, w:q.filter(x=>won(x)&&qDate(x)&&monthKey(qDate(x))===mk).length}
+  };
+}
+function quotesHTML(day){
+  const st=quoteStats(day).day, cfg=S.cfg, open=S.quotes.filter(x=>x.status==="open").sort((a,b)=>a.date<b.date?-1:1);
+  let h='<section class="card"><h3>طلبات التسعير <small>الهدف '+cfg.dailyQuotes+' يومياً وإغلاق '+cfg.dailyWins+'</small></h3>'
+   +kpi("طلبات التسعير",st.n,cfg.dailyQuotes)+kpi("إغلاقات ناجحة",st.w,cfg.dailyWins);
+  if(open.length) h+='<h2 class="sec">بانتظار الإغلاق <small>'+open.length+'</small></h2><div class="list">'+open.slice(0,8).map(q=>{
+    const c=S.customers.get(q.customerId), age=diff(q.date,todayStr());
+    return '<div class="ord" style="flex-wrap:wrap"><span style="flex:1 1 100%"><b>'+esc(c?cname(c):"—")+'</b> · '+esc(shorten(q.item,40))+(q.value>0?' · '+q.value.toLocaleString("en-US")+' ر.س':'')+' <span class="'+(age>=2?"due":"")+'">'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span></span>'
+     +'<button class="btn sm primary" data-act="quote-win" data-id="'+esc(q.id)+'">أُغلقت ✓</button><button class="btn sm" data-act="quote-lose" data-id="'+esc(q.id)+'">لم تُغلق</button></div>';
+  }).join("")+'</div>';
+  return h+'<button class="btn primary" data-act="new-quote">'+ICON.plus.replace("<svg",'<svg width="18" height="18"')+'طلب تسعير جديد</button></section>';
+}
+function openQuote(cid){
+  let sel=cid||null;
+  const chosen=()=>{ const c=S.customers.get(sel); return c?'<div class="v-note"><span class="k">العميل</span>'+esc(cname(c)+" · "+facOf(c).name)+'</div>':''; };
+  openSheet({
+    title:"طلب تسعير جديد", sub:"سجّل كل طلب سعر تتلقاه من العملاء",
+    body:'<div id="qt-sel">'+chosen()+'</div>'+(cid?'':'<div class="field"><label for="qt-q">العميل</label><input id="qt-q" class="input" type="search" placeholder="ابحث بالاسم أو المنشأة" autocomplete="off"><div id="qt-list"></div></div>')
+      +'<div class="field"><label for="qt-item">ما الذي طلب تسعيره؟</label><input id="qt-item" class="input" placeholder="الصنف والكمية، مثال: فحمات كامري 2018 × 4"></div>'
+      +'<div class="field"><label for="qt-val">القيمة التقديرية بالريال (اختياري)</label><input id="qt-val" class="input" inputmode="decimal" dir="ltr"></div><div class="err" id="qt-err" hidden></div>',
+    foot:'<button class="btn primary" id="qt-s">حفظ الطلب</button><button class="btn" data-act="close-sheet">إلغاء</button>',
+    mount(root){
+      const draw=()=>{ const q=($("#qt-q")||{}).value||"", l=$("#qt-list"); if(!l) return;
+        l.innerHTML=[...S.customers.values()].filter(c=>matchQ(c,q)).slice(0,12).map(c=>'<div class="pick"><div class="p-main"><div class="p-name">'+esc(cname(c))+'</div><div class="p-sub">'+esc(facOf(c).name)+'</div></div><button class="btn sm'+(sel===c.id?' primary':'')+'" data-qpick="'+esc(c.id)+'">'+(sel===c.id?'✓':'اختر')+'</button></div>').join(""); };
+      const q=$("#qt-q"); if(q){ q.addEventListener("input",draw); draw(); }
+      root.addEventListener("click",e=>{ const b=e.target.closest("[data-qpick]"); if(!b) return; sel=b.dataset.qpick; $("#qt-sel").innerHTML=chosen(); draw(); });
+      $("#qt-s").addEventListener("click",async()=>{
+        const item=$("#qt-item").value.trim(), val=num($("#qt-val").value), e=$("#qt-err"), miss=[];
+        if(!sel) miss.push("اختر العميل"); if(item.length<3) miss.push("اكتب ما طلب تسعيره");
+        if(miss.length){ e.textContent="أكمل: "+miss.join("، "); e.hidden=false; return; }
+        $("#qt-s").disabled=true;
+        const c=S.customers.get(sel);
+        const r=await guard(sb.from("quotes").insert({id:uuid(),customer_id:sel,facility_id:c?c.facilityId:null,date:todayStr(),item,value:val>0?val:null,status:"open",created_by:S.email}).select().single(),"سُجّل طلب التسعير");
+        if(r){ putQuote(r); refresh(); closeSheet(); } else $("#qt-s").disabled=false;
+      });
+    }
+  });
+}
+function openQuoteClose(id,won){
+  const q=S.quotes.find(x=>x.id===id); if(!q) return; const c=S.customers.get(q.customerId)||{};
+  openSheet({
+    title:won?"أُغلق التسعير بطلبية":"لم يُغلق التسعير", sub:esc(cname(c)+" · "+q.item),
+    body:won?'<div class="field"><label for="qc-no">رقم الطلبية في العمليات</label><input id="qc-no" class="input" dir="ltr"></div>'
+        +'<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="qc-nono" style="width:18px;height:18px;accent-color:var(--accent)">لم أحصل على الرقم بعد</label>'
+        +'<div class="field"><label for="qc-val">قيمة الطلبية بالريال</label><input id="qc-val" class="input" inputmode="decimal" dir="ltr" value="'+esc(q.value>0?q.value:"")+'"></div>'
+      :'<div class="field"><label for="qc-why">السبب</label><select id="qc-why" class="input"><option value="">اختر السبب</option>'+LOST_WHY.map(x=>'<option>'+x+'</option>').join("")+'</select></div>',
+    foot:'<button class="btn primary" id="qc-s">حفظ</button><button class="btn" data-act="close-sheet">إلغاء</button>'+'<div class="err" id="qc-err" hidden style="flex:1 1 100%"></div>',
+    mount(){ $("#qc-s").addEventListener("click",async()=>{
+      const e=$("#qc-err"); let patch={closed_at:new Date().toISOString()};
+      if(won){
+        const no=$("#qc-no").value.trim(), val=num($("#qc-val").value), miss=[];
+        if(!(val>0)) miss.push("قيمة الطلبية"); if(!no&&!$("#qc-nono").checked) miss.push("رقم الطلبية أو علّم «لم أحصل عليه»");
+        if(miss.length){ e.textContent="أكمل: "+miss.join("، "); e.hidden=false; return; }
+        $("#qc-s").disabled=true;
+        const o=await guard(sb.from("orders").insert({id:uuid(),visit_id:null,customer_id:q.customerId,facility_id:c.facilityId||null,date:todayStr(),order_no:no||null,value:val,status:"confirmed",source:"manual",created_by:S.email}).select().single());
+        if(!o){ $("#qc-s").disabled=false; return; } putOrder(o);
+        Object.assign(patch,{status:"won",order_id:o.id,value:val});
+      } else {
+        const w=$("#qc-why").value; if(!w){ e.textContent="اختر السبب."; e.hidden=false; return; }
+        $("#qc-s").disabled=true; Object.assign(patch,{status:"lost",lost_reason:w});
+      }
+      const r=await guard(sb.from("quotes").update(patch).eq("id",id).select().single(),won?"مبروك على الإغلاق!":"سُجّل السبب");
+      if(r){ putQuote(r); refresh(); closeSheet(); } else $("#qc-s").disabled=false;
+    }); }
+  });
+}
+
 /* coach note (manager) */
 function openCoach(id){
   const v=S.visitById.get(id); if(!v) return; const c=S.customers.get(v.customerId)||{};
@@ -1719,7 +1826,7 @@ function openCoach(id){
 /* plan settings (manager) */
 function openSettings(){
   const c=S.cfg;
-  const F=[["dailyTarget","الزيارات اليومية المستهدفة"],["weeklyNew","زيارات العملاء الجدد أسبوعياً"],["weeklyOrders","الطلبيات الناجحة أسبوعياً"],["monthlyConv","تحويل جدد إلى حاليين شهرياً"],["ordersToConvert","عدد الطلبيات ليصبح الجديد حالياً"],["lapsedDays","يصبح الحالي سابقاً بعد (يوم بلا طلبية)"],["planStartCount","عدد الحاليين في بداية الخطة"],["valueGood","قيمة الطلبات الشهرية للمنشأة التي تعتبر ممتازة (ريال)"],["activityGood","عدد الطلبيات في 90 يوماً الذي يعتبر ممتازاً"],["marginGood","هامش الربح % الذي يعتبر ممتازاً"]];
+  const F=[["dailyTarget","الزيارات اليومية المستهدفة"],["weeklyNew","زيارات العملاء الجدد أسبوعياً"],["weeklyOrders","الطلبيات الناجحة أسبوعياً"],["monthlyConv","تحويل جدد إلى حاليين شهرياً"],["ordersToConvert","عدد الطلبيات ليصبح الجديد حالياً"],["lapsedDays","يصبح الحالي سابقاً بعد (يوم بلا طلبية)"],["planStartCount","عدد الحاليين في بداية الخطة"],["dailyQuotes","طلبات التسعير اليومية المستهدفة"],["dailyWins","الإغلاقات الناجحة اليومية المستهدفة"],["workDaysMonth","أيام العمل في الشهر"],["valueGood","قيمة الطلبات الشهرية للمنشأة التي تعتبر ممتازة (ريال)"],["activityGood","عدد الطلبيات في 90 يوماً الذي يعتبر ممتازاً"],["marginGood","هامش الربح % الذي يعتبر ممتازاً"]];
   openSheet({
     title:"أهداف الخطة", sub:"تُطبّق فوراً على التطبيق عند الجميع",
     body:F.map(f=>'<div class="field"><label for="st-'+f[0]+'">'+f[1]+'</label><input id="st-'+f[0]+'" class="input num" type="number" min="1" inputmode="numeric" value="'+esc(c[f[0]])+'"></div>').join("")
@@ -1757,6 +1864,9 @@ document.addEventListener("click",async e=>{
   if(a==="carry-drop"){ b.disabled=true; const ids=carryItems(S.day).map(x=>x.carryVisit.id); const up=await guard(sb.from("visits").update({state:"missed"}).in("id",ids).select(),"تم تجاهلها وسُجّلت كزيارات لم تتم"); if(up&&up.forEach){ up.forEach(putVisit); refresh(); } return; }
   if(a==="toggle-imp"){ const c=S.customers.get(id); if(!c) return; const r=await guard(sb.from("customers").update({important:!c.important}).eq("id",id).select().single(),c.important?"أُلغي التمييز":"مُيّز كعميل مهم"); if(r){ putCust(r); refresh(); openCustomer(id); } return; }
   if(a==="guide") return openGuide(id);
+  if(a==="new-quote") return openQuote(id||null);
+  if(a==="quote-win") return openQuoteClose(id,true);
+  if(a==="quote-lose") return openQuoteClose(id,false);
   if(a==="prio-add"){ b.disabled=true; await createVisit(id,S.day); return; }
   if(a==="open-quality") return openQuality();
   if(a==="edit-order") return openOrder(id);
