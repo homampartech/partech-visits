@@ -198,6 +198,8 @@ textarea.input{min-height:110px;resize:vertical;line-height:1.5}
 @media (min-width:640px){.split{grid-template-columns:1fr 1fr}.tiles{grid-template-columns:repeat(4,1fr)}}
 .credit{background:var(--surface-2);border-radius:14px;padding:12px 14px;font-size:15px;color:var(--ink-2)}
 .credit.on{background:var(--good-soft);color:var(--ink)}
+.recs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.recs li{background:var(--surface-2);border-radius:14px;padding:12px 14px;font-size:15px;line-height:1.55}
 
 /* guide */
 .guide details{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:0}
@@ -327,7 +329,7 @@ const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
 "use strict";
 
 /* ---------- constants ---------- */
-const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:5000, activityGood:12, marginGood:20, dailyQuotes:10, dailyWins:3, workDaysMonth:26};
+const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:5000, activityGood:12, marginGood:20, dailyQuotes:10, dailyWins:3, workDaysMonth:26, weekWins:18, monthWins:78, bonusPct:5};
 const LOST_WHY = ["السعر مرتفع","اشترى من مورد آخر","لا يحتاج حالياً","تأخّرنا في الرد","القطعة غير متوفرة","أخرى"];
 const ST = {current:"حالي", lapsed:"سابق", new:"جديد"};
 const PURPOSE = {order:"أخذ طلبية", intro:"تعريف ببارتك", followup:"متابعة", recover:"استرجاع العميل", collect:"تحصيل / تسليم"};
@@ -895,7 +897,7 @@ function renderView(){
       const q=$("#msg-q"); q.value=S.mq||""; q.addEventListener("input",()=>{S.mq=q.value;updateMsgs();}); }
     updateMsgs(); return;
   }
-  if(S.tab==="guide"){ if(S.mounted!=="guide"){ v.innerHTML=guideHTML(); S.mounted="guide"; } return; }
+  if(S.tab==="guide"){ if(S.mounted!=="guide"){ v.innerHTML=guideHTML(); S.mounted="guide"; } const rc=$("#recs"); if(rc) rc.innerHTML=recsHTML(); return; }
   if(S.tab==="today"){ v.innerHTML = installHTML()+todayHTML(); S.mounted="today"; }
   else if(S.tab==="dash"){ v.innerHTML = dashHTML(); S.mounted="dash"; }
   else if(S.tab==="customers"){
@@ -1129,12 +1131,12 @@ function dashHTML(){
 function dashQuotes(t){
   const cfg=S.cfg, st=quoteStats(t), mk=monthKey(t), ms=mk+"-01";
   let el=0; for(let d=ms;d<=t;d=addDays(d,1)) if(dow(d)!==5) el++;
-  const pace=Math.min(1,el/cfg.workDaysMonth), mq=cfg.dailyQuotes*cfg.workDaysMonth, mw=cfg.dailyWins*cfg.workDaysMonth;
+  const pace=Math.min(1,el/cfg.workDaysMonth), mq=cfg.dailyQuotes*cfg.workDaysMonth, mw=cfg.monthWins;
   const rate=st.month.n?Math.round(st.month.w/st.month.n*100):0, tr=Math.round(cfg.dailyWins/cfg.dailyQuotes*100);
   const lost=new Map(); S.quotes.filter(q=>q.status==="lost"&&q.date>=addDays(t,-60)).forEach(q=>lost.set(q.lostReason||"أخرى",(lost.get(q.lostReason||"أخرى")||0)+1));
   return '<section class="card"><h3>التسعير والإغلاق <small>'+cfg.dailyQuotes+' طلبات يومياً، وإغلاق '+cfg.dailyWins+'</small></h3>'
    +kpi("طلبات التسعير اليوم",st.day.n,cfg.dailyQuotes)+kpi("إغلاقات اليوم",st.day.w,cfg.dailyWins)
-   +kpi("طلبات التسعير هذا الأسبوع",st.week.n,cfg.dailyQuotes*6)+kpi("إغلاقات هذا الأسبوع",st.week.w,cfg.dailyWins*6)
+   +kpi("طلبات التسعير هذا الأسبوع",st.week.n,cfg.dailyQuotes*6)+kpi("إغلاقات هذا الأسبوع",st.week.w,cfg.weekWins)
    +kpi("طلبات التسعير هذا الشهر",st.month.n,mq,{pace,hint:cfg.workDaysMonth+" يوم عمل في الشهر"})+kpi("إغلاقات هذا الشهر",st.month.w,mw,{pace})
    +kpi("نسبة الإغلاق هذا الشهر",rate,tr,{pct:1,hint:"الهدف: إغلاق "+cfg.dailyWins+" من كل "+cfg.dailyQuotes+" طلبات"})
    +(lost.size?'<div class="hint v-sub">أسباب عدم الإغلاق: '+[...lost].sort((a,b)=>b[1]-a[1]).map(x=>esc(x[0])+" ("+x[1]+")").join("، ")+'</div>':'')
@@ -1194,6 +1196,7 @@ function chart14(t){
 /* ---------- GUIDE ---------- */
 function guideHTML(){
   return '<div class="guide list">'
+  +'<div class="card" id="recs"></div>'
   +'<div class="card"><h3>الخطة باختصار</h3><div style="font-size:14px;display:flex;flex-direction:column;gap:6px">'
   +'<div><b>'+S.cfg.dailyTarget+' زيارات كل يوم</b> بين حاليين وسابقين وجدد، وزيارة واحدة أسبوعياً لكل عميل حالي.</div>'
   +'<div><b>'+S.cfg.dailyQuotes+' طلبات تسعير يومياً</b> من عملائك وإغلاق <b>'+S.cfg.dailyWins+'</b> منها على الأقل (نحو '+S.cfg.workDaysMonth+' يوم عمل في الشهر، والجمعة إجازة). سجّل كل طلب سعر من تبويب «اليوم»، وأغلقه بطلبية أو سجّل سبب عدم الإغلاق.</div>'
@@ -1836,10 +1839,33 @@ function achievements(day){
   let daysHit=0; per.forEach((n,d)=>{ if(monthKey(d)===mk&&n>=cfg.dailyWins) daysHit++; });
   let streak=0, first=true;
   for(let d=day,i=0;i<120;d=addDays(d,-1),i++){ if(dow(d)===5) continue; if((per.get(d)||0)>=cfg.dailyWins) streak++; else if(first&&d===day) { first=false; continue; } else break; first=false; }
-  const weekT=cfg.dailyWins*6, monthT=cfg.dailyWins*cfg.workDaysMonth;
+  const weekT=cfg.weekWins, monthT=cfg.monthWins;
   const dayHit=st.day.w>=cfg.dailyWins, weekHit=st.week.w>=weekT, monthHit=st.month.w>=monthT;
   const credit=monthHit?"الهدف الشهري":weekHit?"الهدف الأسبوعي":dayHit?"الهدف اليومي":"";
-  return {st,daysHit,streak,weekT,monthT,dayHit,weekHit,monthHit,credit};
+  return {st,daysHit,streak,weekT,monthT,dayHit,weekHit,monthHit,credit,bonus:bonusInfo(day,credit)};
+}
+/* bonus: every closed deal beyond the target of the highest level reached earns bonusPct% of that deal's profit. Profit (margin) is manager-only, so the amount is computed only on the manager's device. */
+function bonusInfo(day,credit){
+  const cfg=S.cfg, mk=monthKey(day), lvl=credit==="الهدف الشهري"?"m":credit==="الهدف الأسبوعي"?"w":credit?"d":"";
+  const o={n:0,amount:null,missing:0,pct:cfg.bonusPct};
+  if(!lvl) return o;
+  const won=S.quotes.filter(q=>q.status==="won"&&q.closedAt&&monthKey(qDate(q))===mk).sort((a,b)=>a.closedAt<b.closedAt?-1:1);
+  const tgt=lvl==="m"?cfg.monthWins:lvl==="w"?cfg.weekWins:cfg.dailyWins, cnt=new Map(), ex=[];
+  won.forEach(q=>{ const d=qDate(q), k=lvl==="m"?mk:lvl==="w"?weekStart(d):d, n=(cnt.get(k)||0)+1; cnt.set(k,n); if(n>tgt) ex.push(q); });
+  o.n=ex.length;
+  if(S.isOwner){
+    let sum=0;
+    ex.forEach(q=>{ const od=S.orders.find(x=>x.id===q.orderId), v=od&&od.value!=null?od.value:q.value, m=od?S.costs.get(od.id):null;
+      if(v==null||m==null||isNaN(m)) o.missing++; else sum+=v*m/100*cfg.bonusPct/100; });
+    o.amount=Math.round(sum);
+  }
+  return o;
+}
+function bonusLine(a){
+  const cfg=S.cfg, b=a.bonus;
+  if(!a.credit) return 'بعد أن تحقق الهدف اليومي ('+cfg.dailyWins+' إغلاقات)، كل إغلاق إضافي يُحتسب لك <b>'+cfg.bonusPct+'%</b> من ربح الصفقة. بقي <b>'+Math.max(0,cfg.dailyWins-a.st.day.w)+'</b> اليوم.';
+  return 'كل إغلاق فوق الهدف يُحتسب لك <b>'+cfg.bonusPct+'%</b> من ربح الصفقة. '+(b.n?'لديك هذا الشهر <b>'+b.n+'</b> إغلاقاً فوق الهدف.':'أي إغلاق إضافي من الآن يدخل في حافزك.')
+    +(S.isOwner&&b.amount!=null?'<br><b>للمدير:</b> حافز هذا الشهر <b>'+b.amount+'</b> ريال'+(b.missing?' (يُستثنى '+b.missing+' بلا هامش ربح)':'')+'.':'');
 }
 function achLine(day){
   const a=achievements(day), cfg=S.cfg;
@@ -1852,7 +1878,47 @@ function achCard(day){
   return '<section class="card"><h3>إنجازاتك <small>الإغلاقات الناجحة</small></h3>'
    +kpi("اليوم",a.st.day.w,cfg.dailyWins)+kpi("هذا الأسبوع",a.st.week.w,a.weekT)+kpi("هذا الشهر",a.st.month.w,a.monthT)
    +'<div class="tiles"><div class="tile"><b>'+a.daysHit+'</b><span>أيام حققت فيها الهدف اليومي هذا الشهر</span></div><div class="tile"><b>'+a.streak+'</b><span>أيام عمل متتالية حققت فيها الهدف</span></div></div>'
-   +'<div class="credit '+(a.credit?"on":"")+'">'+(a.credit?'يُحتسب لك الآن: <b>'+a.credit+'</b>. الأعلى الذي تحققه هو ما يُحتسب لك.':'حقق '+cfg.dailyWins+' إغلاقات اليوم ليُحتسب لك الهدف اليومي. الأعلى الذي تحققه (يومي ثم أسبوعي ثم شهري) هو ما يُحتسب لك.')+'</div></section>';
+   +'<div class="credit '+(a.credit?"on":"")+'">'+(a.credit?'يُحتسب لك الآن: <b>'+a.credit+'</b>. الأعلى الذي تحققه هو ما يُحتسب لك.':'حقق '+cfg.dailyWins+' إغلاقات اليوم ليُحتسب لك الهدف اليومي. الأعلى الذي تحققه (يومي ثم أسبوعي ثم شهري) هو ما يُحتسب لك.')+'</div>'
+   +'<div class="credit '+(a.bonus.n?"on":"")+'">'+bonusLine(a)+'</div></section>';
+}
+/* ---------- RECOMMENDATIONS: rule-based summary for today and this week (inside the Guide) ---------- */
+function recsHTML(){
+  const day=todayStr(), cfg=S.cfg, st=quoteStats(day), ws=weekStart(day), we=addDays(ws,6), fri=dow(day)===5;
+  const open=S.quotes.filter(q=>q.status==="open"), old=open.filter(q=>diff(q.date,day)>=2).sort((a,b)=>a.date<b.date?-1:1);
+  const D=[], W=[], M=[];
+  if(fri) D.push("اليوم الجمعة، إجازة. استرح وخطط ليوم السبت.");
+  else{
+    if(old.length){ const c=S.customers.get(old[0].customerId); D.push("تابع "+old.length+" طلب تسعير مفتوح منذ يومين فأكثر، أقدمها عند "+(c?cname(c):"عميل")+"."); }
+    if(st.day.n<cfg.dailyQuotes) D.push("سجّلت "+st.day.n+" من "+cfg.dailyQuotes+" طلب تسعير. ناقصك "+(cfg.dailyQuotes-st.day.n)+" لتبلغ الهدف.");
+    if(st.day.w<cfg.dailyWins&&open.length) D.push("لديك "+open.length+" طلب مفتوح. أغلق "+Math.min(open.length,cfg.dailyWins-st.day.w)+" منها اليوم.");
+    const fad=[...S.facM.values()].filter(f=>f.tier==="A"&&f.fading).length;
+    if(fad) D.push(fad+" عملاء من الفئة A يبرد اهتمامهم. زرهم اليوم قبل أي زيارة أخرى.");
+    const wa=waSuggestions(day,99).length; if(wa) D.push(wa+" رسائل واتساب جاهزة في تبويب «الرسائل».");
+    if(st.day.w>=cfg.dailyWins) D.unshift("حققت هدف اليوم ("+st.day.w+" إغلاقات). أي إغلاق إضافي له حافز.");
+  }
+  let rem=0; for(let d=day;d<=we;d=addDays(d,1)) if(dow(d)!==5) rem++;
+  const need=cfg.weekWins-st.week.w;
+  W.push(need>0?"الإغلاقات "+st.week.w+" من "+cfg.weekWins+". تبقى "+need+" في "+rem+" أيام عمل، أي نحو "+Math.ceil(need/Math.max(1,rem))+" يومياً.":"حققت هدف الأسبوع ("+st.week.w+" إغلاقاً). أحسنت.");
+  if(st.week.n>=5){ const rate=Math.round(st.week.w/st.week.n*100), tr=Math.round(cfg.dailyWins/cfg.dailyQuotes*100);
+    if(rate<tr){ const lc=new Map(); S.quotes.filter(q=>q.status==="lost"&&q.date>=ws&&q.date<=we&&q.lostReason).forEach(q=>lc.set(q.lostReason,(lc.get(q.lostReason)||0)+1));
+      const top=[...lc.entries()].sort((a,b)=>b[1]-a[1])[0]; W.push("نسبة إغلاقك "+rate+"% والهدف "+tr+"%."+(top?" أكثر سبب خسارة: «"+top[0]+"».":"")); } }
+  const vw=S.visits.filter(v=>v.state==="done"&&v.date>=ws&&v.date<=we).length, vt=cfg.dailyTarget*6;
+  if(vw<vt*(1-rem/6)-1) W.push("زياراتك "+vw+" من "+vt+" هذا الأسبوع. حاول رفع عدد الزيارات اليومية.");
+  const wn=S.visits.filter(v=>v.state==="done"&&v.kind==="new"&&v.date>=ws&&v.date<=we).length;
+  if(wn<cfg.weeklyNew) W.push("زرت "+wn+" من "+cfg.weeklyNew+" عملاء جدد هذا الأسبوع.");
+  const lap=[...S.customers.values()].filter(c=>stageOf(c.id)==="lapsed").length;
+  if(lap) W.push("عندك "+lap+" عملاء سابقون. اجعل اثنين منهم ضمن زياراتك هذا الأسبوع.");
+  if(S.isOwner){
+    const a=achievements(day), nm=S.orders.filter(o=>o.status!=="cancelled"&&!S.costs.has(o.id)).length;
+    let el=0; for(let d=monthKey(day)+"-01";d<=day;d=addDays(d,1)) if(dow(d)!==5) el++;
+    const pace=Math.round(el/cfg.workDaysMonth*100), done=Math.round(st.month.w/cfg.monthWins*100);
+    M.push("إغلاقات الشهر "+st.month.w+" من "+cfg.monthWins+" ("+done+"%) بعد مضي "+pace+"% من أيام العمل"+(done<pace-10?". متأخر عن الوتيرة.":"."));
+    if(a.bonus.amount!=null&&a.bonus.n) M.push("حافز عبد الرحمن لهذا الشهر "+a.bonus.amount+" ريال من "+a.bonus.n+" إغلاقاً فوق الهدف"+(a.bonus.missing?" (بقي "+a.bonus.missing+" بلا هامش ربح).":"."));
+    if(nm) M.push(nm+" طلبيات بلا هامش ربح. أدخلها ليكتمل حساب الحافز وتصنيف العملاء.");
+    const inc=incompleteOrders().length; if(inc) M.push(inc+" طلبيات ناقصة البيانات (رقم أو قيمة). راجعها من شاشة جودة البيانات.");
+  }
+  const sec=(t,a)=>'<h2 class="sec">'+t+'</h2><ul class="recs">'+a.slice(0,4).map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul>';
+  return '<h3>ملخصك وتوصياتك</h3>'+sec("اليوم",D.length?D:["لا ملاحظات الآن."])+sec("هذا الأسبوع",W)+(M.length?sec("للمدير",M):"");
 }
 function ring(val,target,color,label){
   const r=34, c=2*Math.PI*r, p=Math.min(1,target?val/target:0);
@@ -1991,7 +2057,7 @@ function openCoach(id){
 /* plan settings (manager) */
 function openSettings(){
   const c=S.cfg;
-  const F=[["dailyTarget","الزيارات اليومية المستهدفة"],["weeklyNew","زيارات العملاء الجدد أسبوعياً"],["weeklyOrders","الطلبيات الناجحة أسبوعياً"],["monthlyConv","تحويل جدد إلى حاليين شهرياً"],["ordersToConvert","عدد الطلبيات ليصبح الجديد حالياً"],["lapsedDays","يصبح الحالي سابقاً بعد (يوم بلا طلبية)"],["planStartCount","عدد الحاليين في بداية الخطة"],["dailyQuotes","طلبات التسعير اليومية المستهدفة"],["dailyWins","الإغلاقات الناجحة اليومية المستهدفة"],["workDaysMonth","أيام العمل في الشهر"],["valueGood","قيمة الطلبات الشهرية للمنشأة التي تعتبر ممتازة (ريال)"],["activityGood","عدد الطلبيات في 90 يوماً الذي يعتبر ممتازاً"],["marginGood","هامش الربح % الذي يعتبر ممتازاً"]];
+  const F=[["dailyTarget","الزيارات اليومية المستهدفة"],["weeklyNew","زيارات العملاء الجدد أسبوعياً"],["weeklyOrders","الطلبيات الناجحة أسبوعياً"],["monthlyConv","تحويل جدد إلى حاليين شهرياً"],["ordersToConvert","عدد الطلبيات ليصبح الجديد حالياً"],["lapsedDays","يصبح الحالي سابقاً بعد (يوم بلا طلبية)"],["planStartCount","عدد الحاليين في بداية الخطة"],["dailyQuotes","طلبات التسعير اليومية المستهدفة"],["dailyWins","الإغلاقات الناجحة اليومية المستهدفة"],["workDaysMonth","أيام العمل في الشهر"],["weekWins","الإغلاقات الأسبوعية المستهدفة"],["monthWins","الإغلاقات الشهرية المستهدفة"],["bonusPct","نسبة الحافز % من ربح كل صفقة فوق الهدف"],["valueGood","قيمة الطلبات الشهرية للمنشأة التي تعتبر ممتازة (ريال)"],["activityGood","عدد الطلبيات في 90 يوماً الذي يعتبر ممتازاً"],["marginGood","هامش الربح % الذي يعتبر ممتازاً"]];
   openSheet({
     title:"أهداف الخطة", sub:"تُطبّق فوراً على التطبيق عند الجميع",
     body:F.map(f=>'<div class="field"><label for="st-'+f[0]+'">'+f[1]+'</label><input id="st-'+f[0]+'" class="input num" type="number" min="1" inputmode="numeric" value="'+esc(c[f[0]])+'"></div>').join("")
