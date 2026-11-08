@@ -492,12 +492,15 @@ function derive(c, today, cfg, od){
 }
 /* every order, from the orders table, plus legacy "order" visits that have no orders row */
 function buildEvents(){
-  const ev=[], has=new Set();
-  for(const o of S.orders){ if(o.status==="cancelled"||!o.customerId) continue; ev.push({cid:o.customerId,date:o.date,value:o.value||0,oid:o.id}); if(o.visitId) has.add(o.visitId+"|"+o.customerId); }
+  const ev=[], has=new Set(), opsd=new Map();
+  for(const o of S.orders){ if(o.status==="cancelled"||!o.customerId) continue; ev.push({cid:o.customerId,date:o.date,value:o.value||0,oid:o.id}); if(o.visitId) has.add(o.visitId+"|"+o.customerId);
+    if(o.source==="ops"){ if(!opsd.has(o.customerId)) opsd.set(o.customerId,[]); opsd.get(o.customerId).push(o.date); } }
+  /* an order synced from the operations app is the real record: a visit marked "order" within 3 days of it is the same order */
+  const dup=(cid,d)=>(opsd.get(cid)||[]).some(x=>Math.abs(diff(x,d))<=3);
   for(const v of S.visits){
     if(v.state!=="done") continue;
-    if(v.result==="order" && !has.has(v.id+"|"+v.customerId)) ev.push({cid:v.customerId,date:v.date,value:0,legacy:true});
-    for(const p of v.people||[]) if(p.result==="order" && !has.has(v.id+"|"+p.id)) ev.push({cid:p.id,date:v.date,value:0,legacy:true});
+    if(v.result==="order" && !has.has(v.id+"|"+v.customerId) && !dup(v.customerId,v.date)) ev.push({cid:v.customerId,date:v.date,value:0,legacy:true});
+    for(const p of v.people||[]) if(p.result==="order" && !has.has(v.id+"|"+p.id) && !dup(p.id,v.date)) ev.push({cid:p.id,date:v.date,value:0,legacy:true});
   }
   return ev;
 }
@@ -1158,7 +1161,7 @@ function dashAccounts(t){
   if(rs.size){ const mx=Math.max(...rs.values());
     h+='<section class="card"><h3>أسباب عدم الاهتمام <small>آخر 60 يوماً</small></h3>'+[...rs].sort((a,b)=>b[1]-a[1]).map(([k,n])=>'<div class="kpi"><div class="kl"><span>'+esc(k)+'</span><b class="num">'+n+'</b></div><div class="bar"><i style="width:'+Math.round(n/mx*100)+'%"></i></div></div>').join("")+'</section>'; }
   const inc=incompleteOrders().sort((a,b)=>a.date<b.date?1:-1).slice(0,8);
-  const nm=S.isOwner?S.orders.filter(o=>o.status!=="cancelled"&&!S.costs.has(o.id)).length:0;
+  const nm=S.isOwner?S.orders.filter(o=>o.status!=="cancelled"&&o.source!=="ops"&&!S.costs.has(o.id)).length:0;
   if(inc.length||nm){
     h+='<section class="card"><h3>طلبيات تحتاج استكمالاً'+(nm?' <small>'+nm+' بلا هامش ربح</small>':'')+'</h3>'
      +(inc.length?'<div class="list">'+inc.map(o=>orderRow(o)).join("")+'</div>':'<div class="v-sub">كل الطلبيات لها رقم وقيمة.</div>')
@@ -1909,7 +1912,7 @@ function recsHTML(){
   const lap=[...S.customers.values()].filter(c=>stageOf(c.id)==="lapsed").length;
   if(lap) W.push("عندك "+lap+" عملاء سابقون. اجعل اثنين منهم ضمن زياراتك هذا الأسبوع.");
   if(S.isOwner){
-    const a=achievements(day), nm=S.orders.filter(o=>o.status!=="cancelled"&&!S.costs.has(o.id)).length;
+    const a=achievements(day), nm=S.orders.filter(o=>o.status!=="cancelled"&&o.source!=="ops"&&!S.costs.has(o.id)).length;
     let el=0; for(let d=monthKey(day)+"-01";d<=day;d=addDays(d,1)) if(dow(d)!==5) el++;
     const pace=Math.round(el/cfg.workDaysMonth*100), done=Math.round(st.month.w/cfg.monthWins*100);
     M.push("إغلاقات الشهر "+st.month.w+" من "+cfg.monthWins+" ("+done+"%) بعد مضي "+pace+"% من أيام العمل"+(done<pace-10?". متأخر عن الوتيرة.":"."));
