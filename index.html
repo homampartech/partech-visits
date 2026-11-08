@@ -329,7 +329,8 @@ const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
 "use strict";
 
 /* ---------- constants ---------- */
-const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:2500, activityGood:4, marginGood:20, quoteAlert:6, oppStallDays:10, dailyQuotes:10, dailyWins:3, workDaysMonth:26, weekWins:18, monthWins:78, bonusPct:5};
+const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:2500, activityGood:4, marginGood:20, quoteAlert:6, oppStallDays:10, dailyQuotes:10, dailyWins:3, workDaysMonth:26, weekWins:18, monthWins:78, bonusPct:5, offDays:[]};
+function isOff(day){ return (S.cfg.offDays||[]).includes(day); }
 const LOST_WHY = ["السعر مرتفع","اشترى من مورد آخر","لا يحتاج حالياً","تأخّرنا في الرد","القطعة غير متوفرة","أخرى"];
 const ST = {current:"حالي", lapsed:"سابق", new:"جديد"};
 const PURPOSE = {order:"أخذ طلبية", intro:"تعريف ببارتك", followup:"متابعة", recover:"استرجاع العميل", collect:"تحصيل / تسليم"};
@@ -685,6 +686,12 @@ function candidates(day){
 }
 /* picks the day's visits: carry-overs, due follow-ups, new-customer quota, weekly current visits, lapsed, then best score;
    groups the result by area so the route is short */
+/* first visits to brand-new accounts (the weekly "from zero" target). Follow-ups of new customers are counted apart. */
+function freshVisits(ws,we,skipDay,doneOnly){
+  const first=new Map();
+  for(const v of S.visits){ if(v.state==="missed"||(doneOnly&&v.state!=="done")) continue; const f=first.get(v.customerId); if(!f||v.date<f.date||(v.date===f.date&&v.id<f.id)) first.set(v.customerId,v); }
+  return [...first.values()].filter(v=>(v.kind||stOf(v.customerId))==="new"&&v.date>=ws&&v.date<=we&&v.date!==skipDay);
+}
 function suggestPlan(day, areaPref){
   const cfg=S.cfg, inPlan=visitsOn(day).filter(v=>v.state!=="missed");
   const slots=Math.max(0,cfg.dailyTarget-inPlan.length);
@@ -700,12 +707,12 @@ function suggestPlan(day, areaPref){
   const take=(arr,n)=>{for(const x of arr){ if(pick.length>=slots||n<=0) break; if(used.has(x.id)||(x.c.facilityId&&usedF.has(x.fk))) continue; pick.push(x); used.add(x.id); usedF.add(x.fk); n--; }};
   const by=k=>cands.filter(x=>x.kind===k).sort(desc);
   const left=workDaysLeft(day), {ws,we}=weekInfo(day);
-  const weekNew=S.visits.filter(v=>(v.kind||stOf(v.customerId))==="new"&&v.date>=ws&&v.date<=we&&v.state!=="missed").length;
+  const weekNew=freshVisits(ws,we).length;
   const newToday=Math.ceil(Math.max(0,cfg.weeklyNew-weekNew)/left);
   const curDue=by("current");
   const nOf=st=>pick.filter(x=>stOf(x.id)===st).length;
   take(by("carry"),99); take(by("follow"),99);
-  take(by("new"),newToday);
+  take(by("new").filter(x=>!S.lastVisit.get(x.id)),newToday);
   take(curDue,Math.max(0,Math.min(Math.ceil(curDue.length/left),Math.ceil(slots*0.6)-nOf("current"))));
   take(by("lapsed"),Math.max(0,Math.max(2,Math.ceil(slots*0.3))-nOf("lapsed")));
   /* fill the rest by score, without letting one type take more than 70% of the day; relax if nothing else is left */
@@ -751,10 +758,10 @@ function balanceHTML(ids, day){
   const cfg=S.cfg, n=ids.length, cnt={current:0,lapsed:0,new:0};
   ids.forEach(id=>{const k=stOf(id); if(cnt[k]!=null) cnt[k]++;});
   const ctx=planCtx(day), left=workDaysLeft(day), inSet=new Set(ids), w=[];
-  const weekNew=S.visits.filter(v=>(v.kind||stOf(v.customerId))==="new"&&v.date>=ctx.ws&&v.date<=ctx.we&&v.date!==day&&v.state!=="missed").length+cnt.new;
+  const weekNew=freshVisits(ctx.ws,ctx.we,day).length+ids.filter(id=>stOf(id)==="new"&&!S.visits.some(v=>v.customerId===id&&v.state!=="missed"&&v.date<day)).length;
   const needNew=cfg.weeklyNew-weekNew;
   const lt=left===1?"بقي يوم عمل واحد":"بقي "+plural(left,P_DAY)+" للعمل";
-  if(needNew>0) w.push([left<=needNew,"زيارات الجدد هذا الأسبوع "+weekNew+"/"+cfg.weeklyNew+(left<=needNew?" · "+lt+": أضف عميلاً جديداً اليوم":"")]);
+  if(needNew>0) w.push([left<=needNew,"زيارات أولى لعملاء جدد هذا الأسبوع "+weekNew+"/"+cfg.weeklyNew+(left<=needNew?" · "+lt+": زر منشأة جديدة اليوم":"")]);
   const dueCur=[...S.customers.values()].filter(c=>stOf(c.id)==="current"&&!ctx.visitedWeek.has(c.id)&&!inSet.has(c.id)).length;
   if(dueCur>0) w.push([left<=2,plural(dueCur,P_CUR)+" لم يُزاروا هذا الأسبوع"+(left<=2?" · "+lt:"")]);
   if(n<cfg.dailyTarget) w.push([false,"ناقص "+plural(cfg.dailyTarget-n,P_VISIT)+" لإكمال هدف اليوم"]);
@@ -940,6 +947,8 @@ function todayHTML(){
    +(!list.length?'':balanceHTML(list.filter(v=>v.state!=="missed").map(v=>v.customerId),day))
    +(list.length&&!isFri?'<button class="btn primary" data-act="open-suggest">'+ICON.spark.replace("<svg",'<svg width="18" height="18"')+'أكمل الخطة تلقائياً</button>':'')
    +'<div class="row grow"><button class="btn" data-act="open-planner">'+(list.length?"تعديل الخطة":"اختيار يدوي")+'</button><button class="btn" data-act="open-log">زيارة غير مخططة</button></div>'
+   +(isOff(day)?'<div class="credit">يوم استثنائي: لا تُحتسب عليه أهداف اليوم.</div>':'')
+   +(S.isOwner&&!isFri?'<button class="btn sm ghost" data-act="toggle-off" data-day="'+esc(day)+'">'+(isOff(day)?"إلغاء الاستثناء":"علّم اليوم استثنائياً (مرض أو إجازة أو تدريب)")+'</button>':'')
    +'</section>';
   if(day===t){
     const co=carryItems(day);
@@ -1112,7 +1121,8 @@ function dashHTML(){
   h+='<div class="split">';
   h+='<section class="card"><h3>هذا الأسبوع <small>'+esc(dShort(ws))+' – '+esc(dShort(addDays(ws,5)))+'</small></h3>'
    +kpi("الزيارات المنجزة",week.length,cfg.dailyTarget*6,{pace})
-   +kpi("زيارات عملاء جدد",week.filter(v=>v.kind==="new").length,cfg.weeklyNew,{pace})
+   +kpi("زيارات أولى لعملاء جدد (من الصفر)",freshVisits(ws,we,null,true).length,cfg.weeklyNew,{pace})
+   +kpi("متابعات عملاء جدد في القمع",week.filter(v=>v.kind==="new").length-freshVisits(ws,we,null,true).length,0)
    +kpi("الطلبيات الناجحة",week.filter(v=>v.result==="order").length,cfg.weeklyOrders,{pace})
    +kpi("تغطية الحاليين بزيارة أسبوعية",covered,cur.length,{pace,hint:"كل عميل حالي يجب أن يُزار مرة واحدة في الأسبوع"})
    +'</section>';
@@ -1132,6 +1142,7 @@ function dashHTML(){
    +'</section>';
   h+=achCard(t);
   h+=oppsHTML();
+  h+=trainHTML();
   h+=dashQuotes(t);
   h+=dashAccounts(t);
   h+='<section class="card"><h3>قاعدة العملاء</h3><div class="tiles">'
@@ -1856,7 +1867,7 @@ function achievements(day){
   S.quotes.forEach(q=>{ if(q.status==="won"&&q.closedAt){ const d=qDate(q); per.set(d,(per.get(d)||0)+1); } });
   let daysHit=0; per.forEach((n,d)=>{ if(monthKey(d)===mk&&n>=cfg.dailyWins) daysHit++; });
   let streak=0, first=true;
-  for(let d=day,i=0;i<120;d=addDays(d,-1),i++){ if(dow(d)===5) continue; if((per.get(d)||0)>=cfg.dailyWins) streak++; else if(first&&d===day) { first=false; continue; } else break; first=false; }
+  for(let d=day,i=0;i<120;d=addDays(d,-1),i++){ if(dow(d)===5||isOff(d)) continue; if((per.get(d)||0)>=cfg.dailyWins) streak++; else if(first&&d===day) { first=false; continue; } else break; first=false; }
   const weekT=cfg.weekWins, monthT=cfg.monthWins;
   const dayHit=st.day.w>=cfg.dailyWins, weekHit=st.week.w>=weekT, monthHit=st.month.w>=monthT;
   const credit=monthHit?"الهدف الشهري":weekHit?"الهدف الأسبوعي":dayHit?"الهدف اليومي":"";
@@ -1936,12 +1947,35 @@ function oppsHTML(){
   };
   return '<section class="card"><h3>الفرص والتنبيهات <small>تُحسب من البيانات تلقائياً</small></h3><div class="prio">'+L.slice(0,8).map(row).join("")+'</div></section>';
 }
+/* ---------- TRAINING: how fast new accounts go from first visit to first order, and this month's "zero to loyal" project ---------- */
+function trainHTML(){
+  const day=todayStr(), firstV=new Map(), firstO=new Map(), nv=new Map();
+  for(const v of S.visits){ if(v.state!=="done") continue; nv.set(v.customerId,(nv.get(v.customerId)||[]).concat(v.date)); const f=firstV.get(v.customerId); if(!f||v.date<f.date) firstV.set(v.customerId,v); }
+  for(const e of S.events){ const f=firstO.get(e.cid); if(!f||e.date<f) firstO.set(e.cid,e.date); }
+  let visited=0, ordered=0; const days=[], vis=[];
+  for(const [cid,fv] of firstV){ if((fv.kind||stOf(cid))!=="new"||!S.customers.has(cid)) continue; visited++;
+    const fo=firstO.get(cid); if(fo&&fo>=fv.date){ ordered++; days.push(diff(fv.date,fo)); vis.push(nv.get(cid).filter(d=>d<=fo).length); } }
+  if(!visited) return "";
+  const rate=Math.round(ordered/visited*100), md=days.length?Math.round(median(days)):null, av=vis.length?(vis.reduce((a,b)=>a+b,0)/vis.length).toFixed(1):null;
+  /* this month's project: a brand-new account first visited this month that is still new, furthest along the funnel */
+  let best=null;
+  for(const [cid,fv] of firstV){ const c=S.customers.get(cid); if(!c||(fv.kind||stOf(cid))!=="new"||monthKey(fv.date)!==monthKey(day)||(S.der.get(cid)||{}).status!=="new") continue;
+    const ev=S.events.filter(e=>e.cid===cid).length, qn=S.quotes.filter(q=>q.customerId===cid).length, st=ev?2:qn?1:0, act=(nv.get(cid)||[]).slice().sort().pop();
+    if(!best||st>best.st||(st===best.st&&act>best.act)) best={c,st,act}; }
+  return '<section class="card"><h3>تدريب: من الصفر إلى الطلبية <small>'+visited+' عملاء جدد زُيروا</small></h3>'
+   +'<div class="tiles"><div class="tile"><b>'+rate+'%</b><span>وصلوا إلى أول طلبية</span></div>'
+   +'<div class="tile"><b>'+(md==null?"-":md)+'</b><span>يوماً من أول زيارة إلى أول طلبية (الوسيط)</span></div>'
+   +'<div class="tile"><b>'+(av==null?"-":av)+'</b><span>زيارة في المتوسط حتى أول طلبية</span></div></div>'
+   +(best?'<div class="credit on"><b>مشروع هذا الشهر:</b> '+esc(facOf(best.c).name||cname(best.c))+' · مرحلة «'+OPP_STAGES[best.st]+'». راجعوه معاً كل أسبوع: ما المرحلة؟ ما الاعتراض؟ ما الخطوة التالية؟</div>':'<div class="credit">لا يوجد بعد عميل جديد من هذا الشهر ليكون مشروع التدريب. زر منشأة جديدة وسجّلها.</div>')
+   +'</section>';
+}
 /* ---------- RECOMMENDATIONS: rule-based summary for today and this week (inside the Guide) ---------- */
 function recsHTML(){
   const day=todayStr(), cfg=S.cfg, st=quoteStats(day), ws=weekStart(day), we=addDays(ws,6), fri=dow(day)===5;
   const open=S.quotes.filter(q=>q.status==="open"), old=open.filter(q=>diff(q.date,day)>=2).sort((a,b)=>a.date<b.date?-1:1);
   const D=[], W=[], M=[];
   if(fri) D.push("اليوم الجمعة، إجازة. استرح وخطط ليوم السبت.");
+  else if(isOff(day)) D.push("يوم استثنائي: لا أهداف اليوم.");
   else{
     if(old.length){ const c=S.customers.get(old[0].customerId); D.push("تابع "+old.length+" طلب تسعير مفتوح منذ يومين فأكثر، أقدمها عند "+(c?cname(c):"عميل")+"."); }
     if(st.day.n<cfg.dailyQuotes) D.push("سجّلت "+st.day.n+" من "+cfg.dailyQuotes+" طلب تسعير. ناقصك "+(cfg.dailyQuotes-st.day.n)+" لتبلغ الهدف.");
@@ -1959,8 +1993,8 @@ function recsHTML(){
       const top=[...lc.entries()].sort((a,b)=>b[1]-a[1])[0]; W.push("نسبة إغلاقك "+rate+"% والهدف "+tr+"%."+(top?" أكثر سبب خسارة: «"+top[0]+"».":"")); } }
   const vw=S.visits.filter(v=>v.state==="done"&&v.date>=ws&&v.date<=we).length, vt=cfg.dailyTarget*6;
   if(vw<vt*(1-rem/6)-1) W.push("زياراتك "+vw+" من "+vt+" هذا الأسبوع. حاول رفع عدد الزيارات اليومية.");
-  const wn=S.visits.filter(v=>v.state==="done"&&v.kind==="new"&&v.date>=ws&&v.date<=we).length;
-  if(wn<cfg.weeklyNew) W.push("زرت "+wn+" من "+cfg.weeklyNew+" عملاء جدد هذا الأسبوع.");
+  const wn=freshVisits(ws,we,null,true).length;
+  if(wn<cfg.weeklyNew) W.push("زرت "+wn+" من "+cfg.weeklyNew+" منشآت جديدة لأول مرة هذا الأسبوع. سجّل المنشأة من «زيارة غير مخططة» عند زيارتها.");
   const lap=[...S.customers.values()].filter(c=>stageOf(c.id)==="lapsed").length;
   if(lap) W.push(lap===1?"عندك عميل سابق واحد. اجعله ضمن زياراتك هذا الأسبوع.":"عندك "+lap+" عملاء سابقون. اجعل اثنين منهم ضمن زياراتك هذا الأسبوع.");
   if(S.isOwner){
@@ -1970,6 +2004,11 @@ function recsHTML(){
     M.push("إغلاقات الشهر "+st.month.w+" من "+cfg.monthWins+" ("+done+"%) بعد مضي "+pace+"% من أيام العمل"+(done<pace-10?". متأخر عن الوتيرة.":"."));
     if(a.bonus.amount!=null&&a.bonus.n) M.push("حافز عبد الرحمن لهذا الشهر "+a.bonus.amount+" ريال من "+a.bonus.n+" إغلاقاً فوق الهدف"+(a.bonus.missing?" (بقي "+a.bonus.missing+" بلا هامش ربح).":"."));
     if(nm) M.push(nm===1?"طلبية واحدة بلا هامش ربح. أدخله ليكتمل حساب الحافز وتصنيف العملاء.":nm+" طلبيات بلا هامش ربح. أدخلها ليكتمل حساب الحافز وتصنيف العملاء.");
+    if(!fri&&!isOff(day)){ const hr=new Date().getHours(), doneT=S.visits.filter(v=>v.state==="done"&&v.date===day).length, planT=visitsOn(day).length;
+      if(hr>=10&&!planT) M.push("لم تُعتمد خطة اليوم بعد.");
+      if(hr>=15&&!doneT) M.push("لم تُسجَّل أي زيارة اليوم حتى الآن. اسأله قبل أن تحكم: قد يكون نسي التسجيل."); }
+    let convM=0; for(const c of S.customers.values()){ const d=S.der.get(c.id); if(d&&d.convertedOn&&monthKey(d.convertedOn)===monthKey(day)) convM++; }
+    if(Number(day.slice(8))>=15&&convM<cfg.monthlyConv/2) M.push("تحويل العملاء الجدد ضعيف هذا الشهر ("+convM+" من "+cfg.monthlyConv+"). فكّر برفع الزيارات الأولى للجدد إلى 3 أسبوعياً.");
     const inc=incompleteOrders().length; if(inc) M.push(inc===1?"طلبية واحدة ناقصة البيانات (رقم أو قيمة). راجعها من شاشة جودة البيانات.":inc+" طلبيات ناقصة البيانات (رقم أو قيمة). راجعها من شاشة جودة البيانات.");
   }
   const sec=(t,a)=>'<h2 class="sec">'+t+'</h2><ul class="recs">'+a.slice(0,4).map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul>';
@@ -2119,7 +2158,7 @@ function openSettings(){
       +'<div class="field"><label for="st-planStartMonth">شهر بداية الخطة</label><input id="st-planStartMonth" class="input" type="month" value="'+esc(c.planStartMonth)+'"></div>',
     foot:'<button class="btn primary" id="st-s">حفظ</button><button class="btn" data-act="close-sheet">إلغاء</button>',
     mount(){ $("#st-s").addEventListener("click",async()=>{
-      const d={}; F.forEach(f=>{const n=Number($("#st-"+f[0]).value); d[f[0]]= n>0?n:DEF[f[0]];}); d.planStartMonth=$("#st-planStartMonth").value||DEF.planStartMonth;
+      const d={}; F.forEach(f=>{const n=Number($("#st-"+f[0]).value); d[f[0]]= n>0?n:DEF[f[0]];}); d.planStartMonth=$("#st-planStartMonth").value||DEF.planStartMonth; d.offDays=S.cfg.offDays||[];
       const r=await guard(sb.from("config").upsert({id:1,data:d}).select().single(),"حُفظت الأهداف");
       if(r){ S.cfg=Object.assign({},DEF,d); refresh(); closeSheet(); }
     }); }
@@ -2146,6 +2185,11 @@ document.addEventListener("click",async e=>{
   if(a==="edit-cust") return openCustomerForm(id);
   if(a==="coach") return openCoach(id);
   if(a==="open-suggest") return openSuggest();
+  if(a==="toggle-off"){ const dy=b.dataset.day; b.disabled=true;
+    const cur=await guard(sb.from("config").select("data").eq("id",1).maybeSingle()); const d=Object.assign({},(cur&&cur.data)||{});
+    const arr=(d.offDays||[]).filter(x=>x!==dy); if(!(d.offDays||[]).includes(dy)) arr.push(dy); d.offDays=arr;
+    const r=await guard(sb.from("config").upsert({id:1,data:d}).select().single(),isOff(dy)?"أُلغي الاستثناء":"عُلّم اليوم استثنائياً");
+    if(r){ S.cfg=Object.assign({},DEF,d); refresh(); } else b.disabled=false; return; }
   if(a==="plan-accept"){ const dy=b.dataset.day; b.disabled=true; const n=await addPlanned(dy,suggestPlan(dy,"").picks); if(n) toast("اعتُمدت "+n+" زيارات في خطة اليوم"); else b.disabled=false; return; }
   if(a==="carry-move"){ b.disabled=true; const n=await addPlanned(S.day,carryItems(S.day)); if(n) toast("رُحّلت "+n+" زيارات إلى اليوم"); return; }
   if(a==="carry-drop"){ b.disabled=true; const ids=carryItems(S.day).map(x=>x.carryVisit.id); const up=await guard(sb.from("visits").update({state:"missed"}).in("id",ids).select(),"تم تجاهلها وسُجّلت كزيارات لم تتم"); if(up&&up.forEach){ up.forEach(putVisit); refresh(); } return; }
