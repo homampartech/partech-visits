@@ -329,7 +329,7 @@ const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
 "use strict";
 
 /* ---------- constants ---------- */
-const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:5000, activityGood:12, marginGood:20, dailyQuotes:10, dailyWins:3, workDaysMonth:26, weekWins:18, monthWins:78, bonusPct:5};
+const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:2500, activityGood:4, marginGood:20, quoteAlert:6, oppStallDays:10, dailyQuotes:10, dailyWins:3, workDaysMonth:26, weekWins:18, monthWins:78, bonusPct:5};
 const LOST_WHY = ["السعر مرتفع","اشترى من مورد آخر","لا يحتاج حالياً","تأخّرنا في الرد","القطعة غير متوفرة","أخرى"];
 const ST = {current:"حالي", lapsed:"سابق", new:"جديد"};
 const PURPOSE = {order:"أخذ طلبية", intro:"تعريف ببارتك", followup:"متابعة", recover:"استرجاع العميل", collect:"تحصيل / تسليم"};
@@ -343,7 +343,8 @@ const FTYPES = [
 ];
 const FT = new Map(FTYPES.map(t=>[t[0],t]));
 const LEGACY_FT = {"ورشة":"ورشة صغيرة","مركز صيانة":"ورشة متوسطة / مركز صيانة","مكتب تأجير":"مكتب تأجير صغير","شركة صيانة":"شركة صيانة بفروع","أخرى":"أخرى"};
-const WEIGHTS = {value:.30, margin:.20, activity:.20, cap:.15, interest:.15};
+/* interest (from the salesman's visit results) has no weight in the tier: those entries can be wrong or forgotten. It still drives visit planning. */
+const WEIGHTS = {value:.35, margin:.25, activity:.25, cap:.15, interest:0};
 const GOAL_MET = {yes:"تحقق", part:"تحقق جزئياً", no:"لم يتحقق"};
 const REASONS = ["السعر مرتفع","لديه مورد ثابت","لا يحتاج حالياً","تأخير سابق في التسليم","مشكلة جودة","ليس صاحب قرار الشراء","أخرى"];
 const LEVEL = {high:"اهتمام مرتفع",mid:"اهتمام متوسط",cooling:"اهتمامه يبرد",low:"اهتمام ضعيف"};
@@ -971,6 +972,10 @@ function dailyPriorities(day){
     const k=facKey(c), o=best.get(k), dv=visitFor(c.id,day), u=92+Math.min(age,6);
     if(!o||u>o.u) best.set(k,{u,why:"عرض سعر مفتوح منذ "+plural(age,P_DAY)+": "+shorten(q.item,30)+" · تابعه قبل أن يشتري من غيرك",c,planned:!!dv});
   }
+  for(const o of oppsList()){
+    if(!(o.kind==="nowin"||o.stalled)) continue; const c=o.c, dv=visitFor(c.id,day), k=facKey(c), cur=best.get(k);
+    if(!cur||o.u>cur.u) best.set(k,{u:o.u,why:o.kind==="nowin"?o.msg:"فرصة كبيرة ("+o.stage+") بلا نشاط منذ "+plural(o.idle,P_DAY)+". حرّكها",c,planned:!!dv});
+  }
   return [...best.values()].sort((a,b)=>b.u-a.u).slice(0,3);
 }
 function prioHTML(day){
@@ -1118,6 +1123,7 @@ function dashHTML(){
    +kpi("زيارات ميدانية بدل الاتصال",q.field,100,{pct:1,hint:"الزيارة الميدانية مفضّلة على الاتصال"})
    +'</section>';
   h+=achCard(t);
+  h+=oppsHTML();
   h+=dashQuotes(t);
   h+=dashAccounts(t);
   h+='<section class="card"><h3>قاعدة العملاء</h3><div class="tiles">'
@@ -1220,7 +1226,8 @@ function guideHTML(){
   +'<li><b>لا تخرج بدون خطوة قادمة بموعد:</b> متى الزيارة القادمة؟ ماذا سأحضر له؟</li></ol>'
   +'<div>زر «المرشد» على كل زيارة مخططة يعرض لك خطوات مخصصة لمرحلة هذا العميل (جديد، حالي، سابق) ونوع منشأته. وقائمة الجودة عند التسجيل تتغير بنفس الطريقة.</div></div></details>'
   +'<details><summary>فئات العملاء A / B / C والاهتمام</summary><div class="gb">'
-  +'<div>تُحسب فئة كل منشأة من: نوعها وحجمها (فروع وأسطول)، ونشاطها الفعلي (عدد الطلبيات)، وقيمة طلباتها، وهامش الربح، واهتمامها. المنشأة الكبيرة تبدأ بفئة عالية حتى قبل أول طلبية، والورشة الصغيرة المنتظمة ترتفع بأدائها.</div>'
+  +'<div>تُحسب فئة كل منشأة من: نوعها وحجمها (فروع وأسطول)، ونشاطها الفعلي (عدد الطلبيات)، وقيمة طلباتها، وهامش الربح. لا تدخل نتائج الزيارات في الفئة. المنشأة الكبيرة تبدأ بفئة عالية حتى قبل أول طلبية، والورشة الصغيرة المنتظمة ترتفع بأدائها.</div>'
+  +'<div><b>الفرص الكبيرة:</b> المنشأة الجديدة الكبيرة تظهر في بطاقة «الفرص والتنبيهات» بمرحلتها (تعارف، عرض، تجربة، اعتماد) وتُحسب المرحلة تلقائياً من زياراتك وتسعيراتك وطلبياتك. وإذا طلب عميل '+S.cfg.quoteAlert+' تسعيرات أو أكثر بلا أي إغلاق يظهر تنبيه لنفهم السبب.</div>'
   +'<div><b>الاهتمام</b> يُحسب من نتائج زياراتك ومن الطلبيات الفعلية وإيقاع طلب العميل المعتاد. إذا تأخر العميل عن إيقاعه تظهر «اهتمامه يبرد» وتُرفع أولويته في خطتك.</div></div></details>'
   +'<details><summary>البيانات الإلزامية</summary><div class="gb"><ul>'
   +'<li><b>العميل:</b> اسم الشخص، المنصب، اسم المنشأة، المنطقة، جوال صحيح.</li>'
@@ -1884,6 +1891,43 @@ function achCard(day){
    +'<div class="credit '+(a.credit?"on":"")+'">'+(a.credit?'يُحتسب لك الآن: <b>'+a.credit+'</b>. الأعلى الذي تحققه هو ما يُحتسب لك.':'حقق '+cfg.dailyWins+' إغلاقات اليوم ليُحتسب لك الهدف اليومي. الأعلى الذي تحققه (يومي ثم أسبوعي ثم شهري) هو ما يُحتسب لك.')+'</div>'
    +'<div class="credit '+(a.bonus.n?"on":"")+'">'+bonusLine(a)+'</div></section>';
 }
+/* ---------- OPPORTUNITIES: big new accounts and quote alerts, all inferred from data (no extra entry by the salesman) ---------- */
+const OPP_STAGES=["تعارف","عرض","تجربة","اعتماد"];
+function oppsList(){
+  const day=todayStr(), cfg=S.cfg, out=[], qBy=new Map(), vBy=new Map(), eBy=new Map();
+  const add=(m,k,x)=>{ if(!m.has(k)) m.set(k,[]); m.get(k).push(x); };
+  const kOf=cid=>{ const c=S.customers.get(cid); return c?facKey(c):null; };
+  S.quotes.forEach(q=>{ const k=kOf(q.customerId); if(k) add(qBy,k,q); });
+  S.visits.forEach(v=>{ if(v.state!=="done") return; const seen=new Set(); [v.customerId,...(v.people||[]).map(p=>p.id)].forEach(id=>{ const k=kOf(id); if(k&&!seen.has(k)){ seen.add(k); add(vBy,k,v); } }); });
+  S.events.forEach(e=>{ const k=kOf(e.cid); if(k) add(eBy,k,e); });
+  const byType=new Map();
+  for(const [k,fm] of S.facM){ if(fm.people.every(c=>(S.der.get(c.id)||{}).status==="current")&&fm.monthly>0){ const t=fm.fac.type; if(!byType.has(t)) byType.set(t,[]); byType.get(t).push(fm.monthly); } }
+  for(const [k,fm] of S.facM){
+    const qs=qBy.get(k)||[], vs=vBy.get(k)||[], es=eBy.get(k)||[], c=fm.people[0], name=fm.fac.name||cname(c);
+    const dates=[...qs.map(q=>q.date),...vs.map(v=>v.date),...es.map(e=>e.date)].sort(), last=dates.length?dates[dates.length-1]:null;
+    const firstQ=qs.length?qs.map(q=>q.date).sort()[0]:null;
+    if(qs.length>=cfg.quoteAlert&&!qs.some(q=>q.status==="won")&&!(firstQ&&es.some(e=>e.date>=firstQ)))
+      out.push({k,fm,c,name,kind:"nowin",u:93,n:qs.length,last,msg:"طلب "+qs.length+" تسعيرات بلا أي طلبية ناجحة. افهم السبب: السعر أم التوفر أم شيء آخر؟"});
+    const allNew=fm.people.every(p=>(S.der.get(p.id)||{}).status==="new");
+    if(allNew&&es.length<cfg.ordersToConvert&&(fm.tier==="A"||(es.length>=1&&fm.monthly>=cfg.valueGood*0.6))){
+      const stage=es.length>=1?2:qs.length?1:vs.length?0:-1, idle=last?diff(last,day):null, stalled=idle==null||idle>=cfg.oppStallDays;
+      const tm=byType.get(fm.fac.type), exp=tm&&tm.length>=3?Math.round(median(tm)):null;
+      out.push({k,fm,c,name,kind:"opp",stage,u:88,stalled,idle:idle==null?0:idle,last,exp,n:es.length});
+    }
+  }
+  return out;
+}
+function oppsHTML(){
+  const L=oppsList().sort((a,b)=>(a.kind==="nowin"?0:a.stalled?1:2)-(b.kind==="nowin"?0:b.stalled?1:2)); if(!L.length) return "";
+  const day=todayStr();
+  const row=o=>{
+    if(o.kind==="nowin") return '<div class="pi"><div class="pm"><b>'+esc(o.name)+' '+tierChip(o.c)+'</b><span class="pw" style="color:var(--bad)">'+esc(o.msg)+'</span>'+(o.last?'<span class="pw">آخر نشاط '+esc(ago(o.last))+'</span>':'')+'</div></div>';
+    const trk=OPP_STAGES.map((s,i)=>'<span class="chip '+(i<=o.stage?"order":"muted")+'" style="font-size:12px">'+s+'</span>').join(" ");
+    return '<div class="pi"><div class="pm"><b>'+esc(o.name)+' '+tierChip(o.c)+'</b><span class="pw">'+trk+'</span>'
+      +'<span class="pw">'+(o.last?'آخر نشاط '+esc(ago(o.last)):'لا نشاط بعد')+(o.stalled?' · <b style="color:var(--bad)">متعثرة</b>':'')+(o.exp?' · المتوقع نحو '+o.exp+' ريال شهرياً':'')+'</span></div></div>';
+  };
+  return '<section class="card"><h3>الفرص والتنبيهات <small>تُحسب من البيانات تلقائياً</small></h3><div class="prio">'+L.slice(0,8).map(row).join("")+'</div></section>';
+}
 /* ---------- RECOMMENDATIONS: rule-based summary for today and this week (inside the Guide) ---------- */
 function recsHTML(){
   const day=todayStr(), cfg=S.cfg, st=quoteStats(day), ws=weekStart(day), we=addDays(ws,6), fri=dow(day)===5;
@@ -2060,7 +2104,7 @@ function openCoach(id){
 /* plan settings (manager) */
 function openSettings(){
   const c=S.cfg;
-  const F=[["dailyTarget","الزيارات اليومية المستهدفة"],["weeklyNew","زيارات العملاء الجدد أسبوعياً"],["weeklyOrders","الطلبيات الناجحة أسبوعياً"],["monthlyConv","تحويل جدد إلى حاليين شهرياً"],["ordersToConvert","عدد الطلبيات ليصبح الجديد حالياً"],["lapsedDays","يصبح الحالي سابقاً بعد (يوم بلا طلبية)"],["planStartCount","عدد الحاليين في بداية الخطة"],["dailyQuotes","طلبات التسعير اليومية المستهدفة"],["dailyWins","الإغلاقات الناجحة اليومية المستهدفة"],["workDaysMonth","أيام العمل في الشهر"],["weekWins","الإغلاقات الأسبوعية المستهدفة"],["monthWins","الإغلاقات الشهرية المستهدفة"],["bonusPct","نسبة الحافز % من ربح كل صفقة فوق الهدف"],["valueGood","قيمة الطلبات الشهرية للمنشأة التي تعتبر ممتازة (ريال)"],["activityGood","عدد الطلبيات في 90 يوماً الذي يعتبر ممتازاً"],["marginGood","هامش الربح % الذي يعتبر ممتازاً"]];
+  const F=[["dailyTarget","الزيارات اليومية المستهدفة"],["weeklyNew","زيارات العملاء الجدد أسبوعياً"],["weeklyOrders","الطلبيات الناجحة أسبوعياً"],["monthlyConv","تحويل جدد إلى حاليين شهرياً"],["ordersToConvert","عدد الطلبيات ليصبح الجديد حالياً"],["lapsedDays","يصبح الحالي سابقاً بعد (يوم بلا طلبية)"],["planStartCount","عدد الحاليين في بداية الخطة"],["dailyQuotes","طلبات التسعير اليومية المستهدفة"],["dailyWins","الإغلاقات الناجحة اليومية المستهدفة"],["workDaysMonth","أيام العمل في الشهر"],["weekWins","الإغلاقات الأسبوعية المستهدفة"],["monthWins","الإغلاقات الشهرية المستهدفة"],["bonusPct","نسبة الحافز % من ربح كل صفقة فوق الهدف"],["quoteAlert","عدد طلبات التسعير دون أي إغلاق الذي ينبّه المدير"],["oppStallDays","أيام بلا نشاط تعتبر الفرصة الكبيرة متعثرة"],["valueGood","قيمة الطلبات الشهرية للمنشأة التي تعتبر ممتازة (ريال)"],["activityGood","عدد الطلبيات في 90 يوماً الذي يعتبر ممتازاً"],["marginGood","هامش الربح % الذي يعتبر ممتازاً"]];
   openSheet({
     title:"أهداف الخطة", sub:"تُطبّق فوراً على التطبيق عند الجميع",
     body:F.map(f=>'<div class="field"><label for="st-'+f[0]+'">'+f[1]+'</label><input id="st-'+f[0]+'" class="input num" type="number" min="1" inputmode="numeric" value="'+esc(c[f[0]])+'"></div>').join("")
