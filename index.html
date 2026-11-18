@@ -644,6 +644,16 @@ function planCtx(day){
 function cadenceDays(c){ const fm=fmOf(c); return fm?(fm.tier==="A"?14:fm.tier==="B"?28:42):28; }
 function facSince(c,day){ const fm=fmOf(c), ppl=fm?fm.people:[c]; let lv=""; for(const p of ppl){ const x=S.lastVisit.get(p.id)||""; if(x>lv) lv=x; } return lv?Math.max(0,diff(lv,day)):99; }
 function visitDue(c,day){ return facSince(c,day)>=cadenceDays(c)*0.6; }
+/* why this visit cannot be replaced by a message (empty when a message would do) */
+function mustReason(c,day){
+  if(!c) return "";
+  const fm=fmOf(c), s=stOf(c.id), fs=facSince(c,day), ivl=cadenceDays(c);
+  if(s==="new") return "عميل جديد في مساره: الزيارة جزء من خطته";
+  if(fm&&fm.tier==="A") return "فئة A: تُزار حضورياً";
+  if(fm&&fm.fading) return "اهتمامه يبرد: يحتاج زيارة";
+  if((s==="current"||s==="lapsed")&&fs>=ivl*1.6) return fs>=99?"لم تُسجَّل له زيارة بعد: يحتاج زيارة":"مضى "+fs+" يوماً على آخر زيارة: تجاوز وتيرته";
+  return "";
+}
 function messagedToday(c){ const fm=fmOf(c), ppl=fm?fm.people:[c], d=todayStr(); return ppl.some(p=>lastMsg(p.id)===d); }
 /* a WhatsApp follow-up is enough (no visit): current B/C accounts that are not cooling and not long overdue for a visit.
    Tier A, cooling accounts and anything overdue by more than 1.6x its rhythm must be visited. */
@@ -1004,7 +1014,7 @@ function todayHTML(){
   else {
     const must=new Set(day===t?dailyPriorities(day).map(x=>x.c.id).concat(newPlaybook().filter(o=>o.touch[1]==="visit"&&o.late>=0).map(o=>o.c.id)):[]);
     const p=list.filter(v=>v.state==="planned"), d=list.filter(v=>v.state!=="planned");
-    if(p.length) h+='<h2 class="sec">زيارات بانتظار التنفيذ <small>'+p.length+'</small></h2><div class="list">'+p.map(v=>visitCard(v,{must:must.has(v.customerId)})).join("")+'</div>';
+    if(p.length) h+='<h2 class="sec">زيارات بانتظار التنفيذ <small>'+p.length+'</small></h2><div class="list">'+p.map(v=>{ const c=S.customers.get(v.customerId), why=day===t?mustReason(c,day):""; return visitCard(v,{must:!!why||must.has(v.customerId),reason:why?why+(c&&messagedToday(c)?" · راسلته اليوم لكن الزيارة ما زالت ضرورية":""):""}); }).join("")+'</div>';
     if(d.length) h+='<h2 class="sec">تم تسجيلها <small>'+d.length+'</small></h2><div class="list">'+d.map(v=>visitCard(v)).join("")+'</div>';
   }
   /* 2) follow-ups that need no visit: messages and calls */
@@ -1093,6 +1103,7 @@ function visitCard(v,o){
   let h='<article class="visit st-'+esc(v.state)+'">'
    +'<div class="v-top"><div style="min-width:0"><div class="v-name">'+(o.noLink?esc(cname(c)):'<button data-act="cust" data-id="'+esc(v.customerId)+'">'+esc(cname(c))+'</button>')+'</div>'
    +'<div class="v-sub">'+esc([facOf(c).name,c.title].filter(Boolean).join(" · "))+'</div>'
+   +(o.reason?'<div class="v-sub" style="color:var(--bad)">'+esc(o.reason)+'</div>':'')
    +(otherNames(v).length?'<div class="v-sub">ومعه: '+esc(otherNames(v).join("، "))+'</div>':'')
    +(o.showBy?'<div class="v-sub">سجّلها: '+esc(teamName(v.doneBy||v.by))+'</div>':'')+'</div>'
    +'<div class="v-time">'+(o.showDate?esc(dShort(v.date))+" ":"")+(v.time?esc(v.time):"")+'</div></div>'
