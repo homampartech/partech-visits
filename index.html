@@ -650,7 +650,7 @@ function visitDue(c,day){ return facSince(c,day)>=cadenceDays(c)*0.6; }
 function mustReason(c,day){
   if(!c) return "";
   const fm=fmOf(c), s=stOf(c.id), fs=facSince(c,day), ivl=cadenceDays(c);
-  if(s==="new") return "عميل جديد في مساره: الزيارة جزء من خطته";
+  if(s==="new") return S.lastVisit.get(c.id)?"عميل جديد في مساره: الزيارة جزء من خطته":"عميل جديد لم تتم زيارته الأولى";
   if(fm&&fm.tier==="A") return "فئة A: تُزار حضورياً";
   if(fm&&fm.fading) return "اهتمامه يبرد: يحتاج زيارة";
   if(s==="lapsed"&&lapsedFlow(c,day)==="visit") return "تواصلنا معه ولم يطلب بعد: حان وقت زيارته";
@@ -756,7 +756,7 @@ function suggestPlan(day, areaPref){
   const nOf=st=>pick.filter(x=>stOf(x.id)===st).length;
   take(by("carry"),99); take(by("follow"),99);
   /* the necessary visits first: new-customer visit touches and the day's priorities */
-  const nvSet=new Set(newPlaybook().filter(o=>o.touch[1]==="visit"&&o.late>=0).map(o=>o.c.id)), prSet=new Set(dailyPriorities(day).map(x=>x.c.id));
+  const nvSet=new Set(newPlaybook().filter(o=>o.touch[1]==="visit"&&o.late>=0).map(o=>o.c.id).concat(firstVisitDue())), prSet=new Set(dailyPriorities(day).map(x=>x.c.id));
   take(cands.filter(x=>nvSet.has(x.id)||prSet.has(x.id)).sort(desc),99);
   take(by("new").filter(x=>!S.lastVisit.get(x.id)),newToday);
   take(curDue,Math.max(0,Math.min(Math.ceil(curDue.length/left),Math.ceil(slots*0.6)-nOf("current"))));
@@ -802,6 +802,7 @@ async function autoPlanToday(){
     } else {
       const ids=new Set(dailyPriorities(day).filter(x=>!x.planned).map(x=>x.c.id));
       for(const o of newPlaybook()) if(o.touch[1]==="visit"&&o.late>=0&&!visitFor(o.c.id,day)) ids.add(o.c.id);
+      for(const id of firstVisitDue()) if(!visitFor(id,day)) ids.add(id);
       const picks=candidates(day).filter(x=>ids.has(x.id));
       if(picks.length){ const n=await addPlanned(day,picks); if(n) toast("أُضيفت "+plural(n,P_VISIT)+" ضرورية إلى خطة اليوم"); }
     }
@@ -2003,6 +2004,15 @@ function newPlaybook(){
   }
   return out.sort((a,b)=>b.late-a.late);
 }
+/* newly registered accounts that were never visited: the first visit is due within two weeks of registration */
+function firstVisitDue(){
+  const day=todayStr(), out=[], seen=new Set();
+  for(const c of S.customers.values()){
+    if(stOf(c.id)!=="new"||S.lastVisit.get(c.id)||!c.since||diff(c.since,day)>14||diff(c.since,day)<0) continue;
+    const k=facKey(c); if(seen.has(k)) continue; seen.add(k); out.push(c.id);
+  }
+  return out;
+}
 function newCustHTML(){
   const L=newPlaybook().filter(o=>o.late>=-1); if(!L.length) return "";
   const rows=L.slice(0,6).map(o=>{
@@ -2207,7 +2217,7 @@ function waSituation(c){
     if(lv0.result==="order"||lv0.result==="interested") return {kind:lv0.result==="order"?"thanksOrder":"afterVisit",u:96};
   }
   /* a brand-new account just registered (met in the field): the welcome message goes out right away, before any visit is logged */
-  if(isNew&&!lv0&&!lm&&c.since&&diff(c.since,day)<=1) return {kind:"welcomeNew",u:97};
+  if(isNew&&!lv0&&!lm&&c.since&&diff(c.since,day)<=7) return {kind:"welcomeNew",u:97}; /* stays on the list for a week until it is sent */
   if(lm&&diff(lm,day)<(isNew?3:7)) return null; /* new accounts can take a follow-up every 3 days, others every 7 */
   const fm=fmOf(c), d=S.der.get(c.id)||{};
   const oq=S.quotes.filter(q=>q.customerId===c.id&&liveQuote(q,day)&&diff(q.date,day)>=1).sort((a,b)=>a.date<b.date?1:-1)[0]; /* the newest live quote */
