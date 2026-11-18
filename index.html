@@ -328,7 +328,7 @@ const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
 "use strict";
 
 /* ---------- constants ---------- */
-const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:2500, activityGood:4, marginGood:20, quoteAlert:6, oppStallDays:10, dailyQuotes:10, dailyWins:3, workDaysMonth:26, weekWins:18, monthWins:78, bonusPct:5, offDays:[]};
+const DEF = {dailyTarget:10, weeklyNew:2, weeklyOrders:18, monthlyConv:4, ordersToConvert:3, lapsedDays:60, planStartMonth:"2026-10", planStartCount:10, valueGood:2500, activityGood:4, marginGood:20, quoteAlert:6, oppStallDays:10, dailyQuotes:10, dailyWins:2, workDaysMonth:26, weekWins:12, monthWins:52, bonusPct:5, offDays:[]};
 function isOff(day){ return (S.cfg.offDays||[]).includes(day); }
 const LOST_WHY = ["السعر مرتفع","اشترى من مورد آخر","لا يحتاج حالياً","تأخّرنا في الرد","القطعة غير متوفرة","أخرى"];
 const ST = {current:"حالي", lapsed:"سابق", new:"جديد"};
@@ -385,7 +385,7 @@ const S = {
   email:null, me:null, team:new Map(), isOwner:false,
   customers:new Map(), visits:[], visitById:new Map(), cfg:{...DEF},
   der:new Map(), lastVisit:new Map(),
-  quotes:[], messages:[], facilities:new Map(), orders:[], costs:new Map(), facM:new Map(), facPeople:new Map(), events:[],
+  quotes:[], messages:[], commission:new Map(), facilities:new Map(), orders:[], costs:new Map(), facM:new Map(), facPeople:new Map(), events:[],
   loaded:false, tab:"today", mounted:null,
   day:todayStr(), filter:"all", q:"", sheet:null
 };
@@ -466,7 +466,7 @@ function rowToOrder(r){return {id:r.id, visitId:r.visit_id||null, customerId:r.c
 function liveQuote(q,day){ return q.status==="open"&&diff(q.date,day||todayStr())<=21&&!quoteDropped(q); }
 /* the salesman recorded that the customer does not want it: the quote leaves his tasks (nothing changes at the operations app) */
 function quoteDropped(q){ return S.messages.some(m=>m.kind==="quoteDrop"&&m.body===q.id); }
-function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", stage:r.stage||"", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", by:r.created_by};}
+function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", stage:r.stage||"", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", approvedAt:r.approved_at||"", by:r.created_by};}
 function putMsg(r){ if(!S.messages.some(x=>x.id===r.id)) S.messages.push({id:r.id,customerId:r.customer_id||null,kind:r.kind||"",body:r.body||"",date:r.date,by:r.created_by}); }
 /* price requests come only from the operations app (created_by "ops-sync"); nothing is entered by hand */
 function putQuote(r){ const q=rowToQuote(r); if(q.by!=="ops-sync") return; const i=S.quotes.findIndex(x=>x.id===q.id); if(i>=0) S.quotes[i]=q; else S.quotes.push(q); }
@@ -900,7 +900,7 @@ async function fetchAllVisits(){
 }
 async function loadAll(retried){
   try{
-    const [c,cfg,team,visits,fac,ord,cost,qts,msgs] = await Promise.all([
+    const [c,cfg,team,visits,fac,ord,cost,qts,msgs,comm] = await Promise.all([
       sb.from("customers").select("*"),
       sb.from("config").select("data").eq("id",1).maybeSingle(),
       sb.from("team").select("*"),
@@ -909,8 +909,10 @@ async function loadAll(retried){
       sb.from("orders").select("*"),
       sb.from("order_costs").select("*"),
       sb.from("quotes").select("*"),
-      sb.from("messages").select("*")
+      sb.from("messages").select("*"),
+      sb.from("commission").select("*")
     ]);
+    S.commission = new Map(((comm&&!comm.error?comm.data:[])||[]).map(r=>[r.month,r]));
     S.messages=[]; ((msgs.error?[]:msgs.data)||[]).forEach(putMsg);
     S.quotes = ((qts.error?[]:qts.data)||[]).map(rowToQuote).filter(q=>q.by==="ops-sync");
     if(c.error) throw c.error; if(team.error) throw team.error;
@@ -1011,6 +1013,7 @@ function todayHTML(){
    +(isOff(day)?'<div class="credit">يوم استثنائي: لا تُحتسب عليه أهداف اليوم.</div>':'')
    +'</section>';
   if(day===t){
+    h+=pushBannerHTML(); setTimeout(pushCheck,0);
     const qd=quoteDue(day);
     if(qd.length) h+='<section class="notice warnrow"><div><b>'+plural(qd.length,["تسعيرة واحدة تنتظر متابعتك","تسعيرتان تنتظران متابعتك","تسعيرات تنتظر متابعتك","تسعيرة تنتظر متابعتك"])+' اليوم</b></div><button class="btn sm primary" data-act="goto-quotes">اذهب إليها</button></section>';
     const co=carryItems(day);
@@ -1900,11 +1903,11 @@ async function mergeFacilities(ids){
 /* ---------- QUOTES: price requests per day and how many close ---------- */
 function qDate(q){ return q.closedAt?ymd(new Date(q.closedAt)):""; }
 function quoteStats(day){
-  const q=S.quotes, ws=weekStart(day), we=addDays(ws,6), mk=monthKey(day), won=x=>x.status==="won";
+  const q=S.quotes, ws=weekStart(day), we=addDays(ws,6), mk=monthKey(day), won=x=>x.status==="won", W=(a,b)=>S.orders.filter(o=>o.source==="ops"&&o.status!=="cancelled"&&o.date>=a&&o.date<=b&&o.value>0).length; /* a win = a confirmed (non-returned) order of one of our customers */
   return {
-    day:{n:q.filter(x=>x.date===day).length, w:q.filter(x=>won(x)&&qDate(x)===day).length},
-    week:{n:q.filter(x=>x.date>=ws&&x.date<=we).length, w:q.filter(x=>won(x)&&qDate(x)>=ws&&qDate(x)<=we).length},
-    month:{n:q.filter(x=>monthKey(x.date)===mk).length, w:q.filter(x=>won(x)&&qDate(x)&&monthKey(qDate(x))===mk).length}
+    day:{n:q.filter(x=>x.date===day).length, w:W(day,day)},
+    week:{n:q.filter(x=>x.date>=ws&&x.date<=we).length, w:W(ws,we)},
+    month:{n:q.filter(x=>monthKey(x.date)===mk).length, w:W(mk+"-01",mk+"-31")}
   };
 }
 function quotesHTML(day){
@@ -2008,12 +2011,6 @@ function bonusInfo(day,credit){
   }
   return o;
 }
-function bonusLine(a){
-  const cfg=S.cfg, b=a.bonus;
-  if(!a.credit) return 'بعد أن تحقق الهدف اليومي ('+cfg.dailyWins+' إغلاقات)، كل إغلاق إضافي يُحتسب لك <b>'+cfg.bonusPct+'%</b> من ربح الصفقة. بقي <b>'+Math.max(0,cfg.dailyWins-a.st.day.w)+'</b> اليوم.';
-  return 'كل إغلاق فوق الهدف يُحتسب لك <b>'+cfg.bonusPct+'%</b> من ربح الصفقة. '+(b.n?'لديك هذا الشهر <b>'+b.n+'</b> إغلاقاً فوق الهدف.':'أي إغلاق إضافي من الآن يدخل في حافزك.')
-    +(S.isOwner&&b.amount!=null?'<br><b>للمدير:</b> حافز هذا الشهر <b>'+b.amount+'</b> ريال'+(b.missing?' (يُستثنى '+b.missing+' بلا هامش ربح)':'')+'.':'');
-}
 function achLine(day){
   const a=achievements(day), cfg=S.cfg;
   return '<div class="achline">'
@@ -2021,14 +2018,15 @@ function achLine(day){
    +'<span class="chip '+(a.monthHit?"order":"muted")+'">الشهر '+a.st.month.w+'/'+a.monthT+(a.monthHit?' ✓':'')+'</span></div>';
 }
 function achCard(day){
-  const a=achievements(day), cfg=S.cfg;
-  return '<section class="card"><h3>إنجازاتك <small>الإغلاقات الناجحة</small></h3>'
-   +kpi("اليوم",a.st.day.w,cfg.dailyWins)+kpi("هذا الأسبوع",a.st.week.w,a.weekT)+kpi("هذا الشهر",a.st.month.w,a.monthT)
-   +'<div class="tiles"><div class="tile"><b>'+a.daysHit+'</b><span>أيام حققت فيها الهدف اليومي هذا الشهر</span></div><div class="tile"><b>'+a.streak+'</b><span>أيام عمل متتالية حققت فيها الهدف</span></div></div>'
-   +'<div class="credit '+(a.credit?"on":"")+'">'+(a.credit?'يُحتسب لك الآن: <b>'+a.credit+'</b>. الأعلى الذي تحققه هو ما يُحتسب لك.':'حقق '+cfg.dailyWins+' إغلاقات اليوم ليُحتسب لك الهدف اليومي. الأعلى الذي تحققه (يومي ثم أسبوعي ثم شهري) هو ما يُحتسب لك.')+'</div>'
-   +'<div class="credit '+(a.bonus.n?"on":"")+'">'+bonusLine(a)+'</div></section>';
-}
-/* ---------- NEW-CUSTOMER PLAYBOOK: a fixed rhythm of touches counted from the first visit, so no new account is forgotten ---------- */
+  const a=achievements(day), cfg=S.cfg, mk=monthKey(day), cm=S.commission.get(mk), left=Math.max(0,cfg.monthWins-a.st.month.w), fm=n=>Math.round(Number(n)||0).toLocaleString("en-US");
+  const money=(!cm||a.st.month.w<cfg.monthWins)
+    ?'بقي <b>'+left+'</b> صفقة ليبدأ احتساب عمولتك: <b>'+cfg.bonusPct+'%</b> من صافي ربح كل صفقة فوق '+cfg.monthWins+' صفقة في الشهر (الربح بعد التوصيل).'
+    :'فوق هدف الشهر: <b>'+cm.extra_n+'</b> صفقة. عمولتك المؤكَّدة <b>'+fm(cm.confirmed)+'</b> ر.س'+(Number(cm.pending)>0?' + <b>'+fm(cm.pending)+'</b> ر.س معلّقة حتى يسدّد العملاء':'')+'.';
+  return '<section class="card"><h3>إنجازاتك <small>الصفقات المؤكَّدة</small></h3>'
+   +kpi("اليوم",a.st.day.w,cfg.dailyWins)+kpi("هذا الأسبوع",a.st.week.w,cfg.weekWins)+kpi("هذا الشهر",a.st.month.w,cfg.monthWins)
+   +'<div class="credit '+((cm&&a.st.month.w>=cfg.monthWins)?"on":"")+'">'+money+'</div>'
+   +'<div class="hint v-sub">الهدف اليومي والأسبوعي مؤشر وتيرة فقط. العمولة شهرية وتُصرف آخر الشهر، وتشمل الصفقات المسدّدة كاملة وغير المرتجعة وبهامش لا يقل عن 10%.</div></section>';
+}/* ---------- NEW-CUSTOMER PLAYBOOK: a fixed rhythm of touches counted from the first visit, so no new account is forgotten ---------- */
 /* [day from first visit, channel, what to do]: msg = WhatsApp, visit = field visit (or call), call = call or message */
 const NEW_TOUCH=[[0,"msg","رسالة شكر بعد الزيارة"],[3,"msg","رسالة فيها قيمة: أسعار أو عرض جاهز"],[7,"visit","زيارة أو اتصال مع طلب تجربة صغيرة"],[14,"call","اتصال أو متابعة التسعير المفتوح"],[21,"visit","زيارة وتعرّف على صاحب القرار"],[30,"visit","مراجعة الشهر: لماذا لم يطلب بعد؟"],[44,"msg","رسالة متابعة"],[58,"visit","زيارة"],[72,"msg","رسالة متابعة"],[86,"visit","زيارة أخيرة قبل المتابعة البطيئة"]];
 function newPlaybook(){
@@ -2165,7 +2163,7 @@ function recsHTML(){
     let el=0; for(let d=monthKey(day)+"-01";d<=day;d=addDays(d,1)) if(dow(d)!==5) el++;
     const pace=Math.round(el/cfg.workDaysMonth*100), done=Math.round(st.month.w/cfg.monthWins*100);
     M.push("إغلاقات الشهر "+st.month.w+" من "+cfg.monthWins+" ("+done+"%) بعد مضي "+pace+"% من أيام العمل"+(done<pace-10?". متأخر عن الوتيرة.":"."));
-    if(a.bonus.amount!=null&&a.bonus.n) M.push("حافز عبد الرحمن لهذا الشهر "+a.bonus.amount+" ريال من "+a.bonus.n+" إغلاقاً فوق الهدف"+(a.bonus.missing?" (بقي "+a.bonus.missing+" بلا هامش ربح).":"."));
+    const cmm=S.commission.get(monthKey(day)); if(cmm&&cmm.extra_n>0) M.push("عمولة عبد الرحمن لهذا الشهر: "+Math.round(cmm.confirmed)+" ريال مؤكَّدة + "+Math.round(cmm.pending)+" معلّقة، من "+cmm.extra_n+" صفقة فوق الهدف.");
     if(!fri&&!isOff(day)){ const hr=new Date().getHours(), doneT=S.visits.filter(v=>v.state==="done"&&v.date===day).length, planT=visitsOn(day).length;
       if(hr>=10&&!planT) M.push("لم تُعتمد خطة اليوم بعد.");
       if(hr>=15&&!doneT) M.push("لم تُسجَّل أي زيارة اليوم حتى الآن. اسأله قبل أن تحكم: قد يكون نسي التسجيل."); }
@@ -2266,19 +2264,32 @@ function waText(c,kind,item,seed){
 }
 function lastMsg(cid){ return S.messages.filter(m=>m.customerId===cid&&m.kind!=="quoteDrop").map(m=>m.date).sort().pop()||null; }
 /* when is a message better than a visit? Tier A and cooling B accounts always get the visit. */
-/* quote follow-up ladder: every priced quote gets a fixed series of touches (message / call) until it closes or goes stale at 21 days, so nothing priced is forgotten.
-   "pend" = priced, waiting for the customer to approve; "appr" = approved but supply not requested yet (more urgent, with calls) */
-const QT={ /* at the operations app "approved" is an internal approval, so every open quote is simply "sent, waiting for the customer to confirm"; buyers confirm within ~3 days, so touches are front-loaded */
-  pend:[[1,"msg","quote"],[3,"msg","quote"],[7,"call"],[14,"msg","quoteLast"]]};
-function quoteLadder(q){ return QT.pend; }
-function quoteDone(q){ return S.messages.filter(m=>m.customerId===q.customerId&&m.date>=q.date&&(m.kind==="qcall"||/^quote/.test(m.kind||""))); }
-function quoteTouch(c,day){
-  const q=S.quotes.filter(x=>x.customerId===c.id&&liveQuote(x,day)&&diff(x.date,day)>=1&&x.stage!=="بانتظار الاعتماد"&&x.stage!=="طلب تسعير").sort((a,b)=>a.date<b.date?1:-1)[0]; if(!q) return null; /* the newest live quote */
-  const done=quoteDone(q); if(done.some(m=>m.date===day)) return null; /* one touch a day at most */
-  const st=quoteLadder(q)[done.length], age=diff(q.date,day); if(!st||age<st[0]) return null;
-  return {q,st,late:age-st[0]};
+/* quote follow-up ladder, timed from the INTERNAL approval of the quote at the operations app (approvedAt):
+   +1h message, +5h call, next day 07:00 message, day 3 07:00 message, day 7 07:00 call, day 14 07:00 final message.
+   Times move into 07:00-21:00 Riyadh and never fall on Friday. Quotes approved before QT_ROLLOUT are "legacy": only the day-7 call and the day-14 final message apply.
+   The same schedule runs in the quote-push edge function, which sends the push notification. */
+const QT_CH=[["msg","quote"],["call"],["msg","quote"],["msg","quote"],["call"],["msg","quoteLast"]], QT_RY=3*3600e3, QT_ROLLOUT=Date.parse("2026-11-18T18:00:00Z");
+function qtAdj(ms){
+  const d=new Date(ms+QT_RY), h=d.getUTCHours();
+  if(h<7) d.setUTCHours(7,0,0,0); else if(h>=21){ d.setUTCDate(d.getUTCDate()+1); d.setUTCHours(7,0,0,0); }
+  if(d.getUTCDay()===5){ d.setUTCDate(d.getUTCDate()+1); d.setUTCHours(7,0,0,0); }
+  return d.getTime()-QT_RY;
 }
-/* quote follow-ups that are due today, oldest quote first (their own list in the quotes card, not in "follow-ups without a visit") */
+function quoteSteps(q){
+  const A=q.approvedAt?Date.parse(q.approvedAt):Date.parse(q.date+"T04:00:00Z"); /* no approval time known: treat as the quote's own day */
+  const b=new Date(A+QT_RY); b.setUTCHours(7,0,0,0); const d0=b.getTime()-QT_RY, raw=[A+3600e3,A+5*3600e3,d0+864e5,d0+3*864e5,d0+7*864e5,d0+14*864e5], T=[];
+  raw.forEach((t,i)=>T.push(qtAdj(Math.max(t,i?T[i-1]+3600e3:0))));
+  return {T,legacy:!(q.approvedAt&&A>=QT_ROLLOUT)};
+}
+function quoteDone(q){ return S.messages.filter(m=>m.customerId===q.customerId&&m.date>=q.date&&(m.kind==="qcall"||/^quote/.test(m.kind||""))&&m.kind!=="quoteDrop"); }
+function quoteTouch(c,day){
+  const q=S.quotes.filter(x=>x.customerId===c.id&&liveQuote(x,day)&&x.stage==="بانتظار التأكيد").sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(a.approvedAt<b.approvedAt?1:-1))[0]; if(!q) return null; /* the newest live quote that is out with the customer */
+  const {T,legacy}=quoteSteps(q), now=Date.now(); let cur=-1; T.forEach((t,i)=>{ if(t<=now) cur=i; });
+  if(cur<0||(legacy&&cur<4)) return null;
+  if(quoteDone(q).length>cur) return null; /* this step (or a later one) is already covered */
+  return {q,st:[T[cur]].concat(QT_CH[cur]),idx:cur,late:Math.floor((now-T[cur])/864e5)};
+}
+/* quote follow-ups that are due now, oldest quote first (their own list in the quotes card, not in "follow-ups without a visit") */
 function quoteDue(day){
   if(dow(day)===5) return [];
   const out=[]; for(const c of S.customers.values()){ if(!phoneOk(normPhone(c.phone))) continue; const qt=quoteTouch(c,day); if(qt) out.push({c,q:qt.q,st:qt.st,late:qt.late}); }
@@ -2290,11 +2301,15 @@ function quoteActBtn(d){
     :'<button class="btn sm primary" data-act="wa" data-id="'+esc(d.c.id)+'" data-kind="'+d.st[2]+'">رسالة</button>';
 }
 function quoteNextText(q,day){
-  const st=quoteLadder(q)[quoteDone(q).length], age=diff(q.date,day), w=x=>x[1]==="call"?"اتصال":"رسالة";
-  if(!st) return "اكتملت المتابعات · يُغلق تلقائياً بعد 21 يوماً";
-  return age>=st[0]?"متابعة مستحقة: "+w(st):"التالية: "+w(st)+" بعد "+plural(st[0]-age,P_DAY);
-}
-function waSituation(c){
+  if(q.stage!=="بانتظار التأكيد") return "بانتظار الاعتماد الداخلي";
+  const {T,legacy}=quoteSteps(q), now=Date.now(), n=quoteDone(q).length, w=i=>QT_CH[i][0]==="call"?"اتصال":"رسالة";
+  let cur=-1; T.forEach((t,i)=>{ if(t<=now) cur=i; });
+  if(n<=cur&&!(legacy&&cur<4)) return "متابعة مستحقة: "+w(cur);
+  let nx=Math.max(n,cur+1); if(legacy) nx=Math.max(nx,4);
+  if(nx>5) return "اكتملت المتابعات · يُغلق تلقائياً بعد 21 يوماً";
+  const hrs=Math.max(0,Math.round((T[nx]-now)/3600e3));
+  return "التالية: "+w(nx)+" "+(hrs<24?"بعد "+hrs+" ساعة":"بعد "+plural(Math.round(hrs/24),P_DAY));
+}function waSituation(c){
   const day=todayStr(); if(dow(day)===5||!phoneOk(normPhone(c.phone))) return null;
   if(inboundToday(c)) return null; /* he is already in conversation with us today */
   const lm=lastMsg(c.id), stg=stageOf(c.id), lv0=lastDoneVisit(c.id), isNew=stg.startsWith("new");
@@ -2431,6 +2446,7 @@ document.addEventListener("click",async e=>{
   if(a==="coach") return openCoach(id);
   if(a==="open-suggest") return openSuggest();
   if(a==="quote-drop") return openQuoteDrop(id);
+  if(a==="push-on") return pushEnable();
   if(a==="dash-more"){ S.dashOpen=!S.dashOpen; return; }
   if(a==="goto-quotes"){ const el=$("#quotes-sec"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
   if(a==="call-log"){ /* the call link opens normally; the touch is logged so the row clears */
@@ -2466,6 +2482,27 @@ document.addEventListener("click",async e=>{
 let lastToday=todayStr();
 setInterval(()=>{ const t=todayStr(); if(t!==lastToday){ if(S.day===lastToday) S.day=t; lastToday=t; refresh(); } },60000);
 
+/* ---------- PUSH NOTIFICATIONS: quote follow-up reminders reach the salesman's phone on time (sent by the quote-push edge function) ---------- */
+const VAPID_PUB="BAWeiy2BW82jlgJV4RO9rjQM-gsji-C6Fo6zHkr0fzjRfFVLru2Fcza5n7lN_rVUQKt7xjXuZ4INGa_9TGYcCCk";
+function pushSupported(){ return "serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window; }
+function b64uBytes(s){ const raw=atob((s+"=".repeat((4-s.length%4)%4)).replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from([...raw].map(c=>c.charCodeAt(0))); }
+function pushBannerHTML(){
+  if(S.isOwner||!pushSupported()||S.pushOn||Notification.permission==="denied") return "";
+  return '<section class="notice warnrow"><div><b>فعّل التنبيهات</b><br>لتصلك تذكيرات التسعيرات في وقتها.</div><button class="btn sm primary" data-act="push-on">تفعيل</button></section>';
+}
+async function pushSave(sub){ const j=sub.toJSON(); return guard(sb.from("push_subs").upsert({endpoint:j.endpoint,email:S.email,p256dh:j.keys.p256dh,auth:j.keys.auth}).select().single()); }
+async function pushEnable(){
+  try{
+    if(await Notification.requestPermission()!=="granted"){ toast("لم تُفعَّل التنبيهات"); return; }
+    const reg=await navigator.serviceWorker.ready; let sub=await reg.pushManager.getSubscription();
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uBytes(VAPID_PUB)});
+    const r=await pushSave(sub); if(r){ S.pushOn=true; toast("فُعّلت التنبيهات"); refresh(); }
+  }catch(e){ toast("تعذّر تفعيل التنبيهات على هذا الجهاز"); }
+}
+function pushCheck(){ /* already subscribed on this device? keep the server copy fresh */
+  if(S.pushChecked||!pushSupported()||Notification.permission!=="granted") return; S.pushChecked=true;
+  navigator.serviceWorker.ready.then(r=>r.pushManager.getSubscription()).then(sub=>{ if(sub&&S.email){ S.pushOn=true; pushSave(sub); } }).catch(()=>{});
+}
 if("serviceWorker" in navigator) window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
 boot();
 })();
