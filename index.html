@@ -464,9 +464,11 @@ function rowToVisit(r){return {id:r.id, customerId:r.customer_id, date:r.date, t
 function rowToFac(r){return {id:r.id, name:r.name||"", type:r.type||"أخرى", area:r.area||"", location:r.location||"", branches:r.branches==null?1:Number(r.branches), fleet:Number(r.fleet||0), note:r.note||"", marginScore:r.margin_score==null?null:Number(r.margin_score)};}
 function rowToOrder(r){return {id:r.id, visitId:r.visit_id||null, customerId:r.customer_id||null, facilityId:r.facility_id||null, date:r.date, orderNo:r.order_no||"", value:r.value==null?null:Number(r.value), status:r.status||"confirmed", source:r.source||"manual"};}
 /* an open price request older than 21 days is treated as cancelled: it is neither shown nor chased */
-function liveQuote(q,day){ return q.status==="open"&&diff(q.date,day||todayStr())<=21; }
+function liveQuote(q,day){ return q.status==="open"&&diff(q.date,day||todayStr())<=21&&!quoteDropped(q); }
+/* the salesman recorded that the customer does not want it: the quote leaves his tasks (nothing changes at the operations app) */
+function quoteDropped(q){ return S.messages.some(m=>m.kind==="quoteDrop"&&m.body===q.id); }
 function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", stage:r.stage||"", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", by:r.created_by};}
-function putMsg(r){ if(!S.messages.some(x=>x.id===r.id)) S.messages.push({id:r.id,customerId:r.customer_id||null,kind:r.kind||"",date:r.date,by:r.created_by}); }
+function putMsg(r){ if(!S.messages.some(x=>x.id===r.id)) S.messages.push({id:r.id,customerId:r.customer_id||null,kind:r.kind||"",body:r.body||"",date:r.date,by:r.created_by}); }
 /* price requests come only from the operations app (created_by "ops-sync"); nothing is entered by hand */
 function putQuote(r){ const q=rowToQuote(r); if(q.by!=="ops-sync") return; const i=S.quotes.findIndex(x=>x.id===q.id); if(i>=0) S.quotes[i]=q; else S.quotes.push(q); }
 function putFac(r){ S.facilities.set(r.id,rowToFac(r)); }
@@ -1083,11 +1085,11 @@ function prioHTML(day){
 /* one list of follow-ups that need no visit: WhatsApp messages and calls; a row disappears once the message is sent */
 function followItems(day){
   /* current accounts that must be visited (tier A, cooling, overdue) are handled by the visit list, except thank-you messages after a visit or delivery */
-  const keep=x=>stOf(x.c.id)!=="current"||msgOnly(x.c,day)||["afterVisit","thanksOrder","delivered","quote","quoteAppr","quoteLast"].includes(x.s.kind);
-  const items=waSuggestions(day,99).filter(keep).map(x=>({c:x.c,kind:x.s.kind,label:WA[x.s.kind].label+(/^quote/.test(x.s.kind)&&x.s.item?" · "+shorten(x.s.item,26):""),why:WA[x.s.kind].why,ch:"msg",u:x.s.u})), seen=new Set(items.map(x=>facKey(x.c)));
+  const keep=x=>stOf(x.c.id)!=="current"||msgOnly(x.c,day)||["afterVisit","thanksOrder","delivered","quote","quoteLast"].includes(x.s.kind);
+  const items=waSuggestions(day,99).filter(keep).map(x=>({c:x.c,kind:x.s.kind,label:WA[x.s.kind].label+(/^quote/.test(x.s.kind)&&x.s.item?" · "+shorten(x.s.item,26):""),why:WA[x.s.kind].why,ch:"msg",qid:x.s.qid,u:x.s.u})), seen=new Set(items.map(x=>facKey(x.c)));
   if(dow(day)!==5) for(const c of S.customers.values()){ /* quote ladder: scheduled calls */
     if(seen.has(facKey(c))||!phoneOk(normPhone(c.phone))) continue; const qt=quoteTouch(c,day); if(!qt||qt.st[1]!=="call") continue;
-    seen.add(facKey(c)); items.push({c,kind:"qcall",label:"اتصال بخصوص تسعيرة · "+shorten(qt.q.item,26),why:"",ch:"call",u:91+Math.min(qt.late,5)});
+    seen.add(facKey(c)); items.push({c,kind:"qcall",label:"اتصال بخصوص تسعيرة · "+shorten(qt.q.item,26),why:"",ch:"call",qid:qt.q.id,u:91+Math.min(qt.late,5)});
   }
   for(const c of S.customers.values()){ /* lapsed B/C accounts whose message went unanswered: call next */
     const fm=fmOf(c); if(stOf(c.id)!=="lapsed"||!fm||fm.tier==="A"||seen.has(facKey(c))||!phoneOk(normPhone(c.phone))||lapsedFlow(c,day)!=="call") continue;
@@ -1102,7 +1104,7 @@ function followItems(day){
 function followHTML(day){
   const L=followItems(day); if(!L.length) return "";
   const row=x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b><span class="pw">'+esc(x.label)+'</span></div>'
-    +(x.ch==="call"?'<a class="btn sm primary" data-act="call-log" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'" href="tel:'+esc(normPhone(x.c.phone))+'">اتصال</a>':'<button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'">رسالة</button>')+'</div>';
+    +(x.ch==="call"?'<a class="btn sm primary" data-act="call-log" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'" href="tel:'+esc(normPhone(x.c.phone))+'">اتصال</a>':'<button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'">رسالة</button>')+(x.qid?'<button class="btn sm" data-act="quote-drop" data-id="'+esc(x.qid)+'">لا يريد</button>':'')+'</div>';
   return '<section class="card"><h3>متابعة بدون زيارة <small>'+L.length+'</small></h3><div class="v-sub">رسالة واحدة تكفي وتُحسب متابعة، ويختفي العميل بعد إرسالها.</div><div class="prio">'+L.slice(0,6).map(row).join("")+'</div>'
     +(L.length>6?'<button class="btn" data-act="tab" data-tab="msgs" style="margin-top:10px;width:100%">باقي الرسائل ('+(L.length-6)+')</button>':'')+'</section>';
 }
@@ -1882,8 +1884,8 @@ function quotesHTML(day){
    +kpi("طلبات التسعير",st.n,cfg.dailyQuotes)+kpi("إغلاقات ناجحة",st.w,cfg.dailyWins);
   if(open.length) h+='<h2 class="sec">تسعيرات تنتظر العميل <small>'+open.length+' · الأحدث أولاً · تُغلق تلقائياً بعد 21 يوماً</small></h2><div class="list">'+open.slice(0,30).map(q=>{
     const c=S.customers.get(q.customerId), age=diff(q.date,todayStr()), appr=q.stage==="بانتظار التأكيد";
-    const tag=appr?'<span class="chip warn" style="background:var(--warn-soft);color:var(--warn)">معتمد · لم يؤكد بعد'+(age>=1?" · تابعه":"")+'</span>':'<span class="chip muted">بانتظار اعتماد العميل</span>';
-    return '<div class="ord" style="flex-wrap:wrap"><span style="flex:1 1 100%"><b>'+esc(c?cname(c):"—")+'</b> · '+esc(shorten(q.item,40))+(q.value>0?' · '+q.value.toLocaleString("en-US")+' ر.س':'')+' <span class="'+(age>=2?"due":"")+'">'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span> '+tag+'<span class="v-sub" style="display:block;margin-top:2px">'+esc(quoteNextText(q,todayStr()))+'</span></span></div>';
+    const tag=appr?'<span class="chip warn" style="background:var(--warn-soft);color:var(--warn)">أُرسلت · بانتظار تأكيد العميل</span>':'<span class="chip muted">قيد الاعتماد الداخلي</span>';
+    return '<div class="ord" style="flex-wrap:wrap"><span style="flex:1 1 100%"><b>'+esc(c?cname(c):"—")+'</b> · '+esc(shorten(q.item,40))+(q.value>0?' · '+q.value.toLocaleString("en-US")+' ر.س':'')+' <span class="'+(age>=2?"due":"")+'">'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span> '+tag+'<span class="v-sub" style="display:block;margin-top:2px">'+esc(quoteNextText(q,todayStr()))+' <button class="btn sm" data-act="quote-drop" data-id="'+esc(q.id)+'">لا يريد</button></span></span></div>';
   }).join("")+'</div>';
   return h+'</section>';
 }
@@ -1911,6 +1913,19 @@ function openQuote(cid){
         if(r){ putQuote(r); refresh(); closeSheet(); } else $("#qt-s").disabled=false;
       });
     }
+  });
+}
+function openQuoteDrop(id){
+  const q=S.quotes.find(x=>x.id===id); if(!q) return; const c=S.customers.get(q.customerId)||{};
+  openSheet({
+    title:"العميل لا يريد الطلبية؟", sub:esc(cname(c)+" · "+q.item),
+    body:'<div class="v-sub">ستُزال من مهامك ولن تُتابَع بعد الآن. لا يتغيّر شيء في برنامج العمليات.</div>',
+    foot:'<button class="btn primary" id="qd-s">نعم، لا يريدها</button><button class="btn" data-act="close-sheet">إلغاء</button>',
+    mount(){ $("#qd-s").addEventListener("click",async()=>{
+      $("#qd-s").disabled=true;
+      const r=await guard(sb.from("messages").insert({id:uuid(),customer_id:q.customerId,kind:"quoteDrop",body:q.id,date:todayStr(),created_by:S.email}).select().single(),"أُزيلت من مهامك");
+      if(r&&r!==true){ putMsg(r); refresh(); closeSheet(); } else $("#qd-s").disabled=false;
+    }); }
   });
 }
 function openQuoteClose(id,won){
@@ -1991,7 +2006,7 @@ function newPlaybook(){
   const add=(m,cid,d)=>{ const c=S.customers.get(cid); if(!c) return; const k=facKey(c); if(!m.has(k)) m.set(k,[]); m.get(k).push(d); };
   for(const v of S.visits){ if(v.state!=="done") continue; add(vis,v.customerId,v.date); (v.people||[]).forEach(p=>add(vis,p.id,v.date));
     const c=S.customers.get(v.customerId); if(c){ const k=facKey(c); if(!first.has(k)||v.date<first.get(k)) first.set(k,v.date); } }
-  S.messages.forEach(m=>add(msg,m.customerId,m.date));
+  S.messages.forEach(m=>{ if(m.kind!=="quoteDrop") add(msg,m.customerId,m.date); });
   for(const [k,F] of first){
     const fm=S.facM.get(k); if(!fm||diff(F,day)>90||diff(F,day)<0) continue;
     if(!fm.people.every(p=>(S.der.get(p.id)||{}).status==="new")) continue;
@@ -2219,17 +2234,16 @@ function waText(c,kind,item,seed){
   return k.t[i].split("{n}").join(addrName(c)).split("{s}").join((S.me&&S.me.name)||"مندوب المبيعات").split("{item}").join(item||"")
     .split("{recap}").join(waRecap(c)).split("{d}").join(lo?String(Math.max(0,diff(lo,todayStr()))):"").replace(/\s+$/,"");
 }
-function lastMsg(cid){ return S.messages.filter(m=>m.customerId===cid).map(m=>m.date).sort().pop()||null; }
+function lastMsg(cid){ return S.messages.filter(m=>m.customerId===cid&&m.kind!=="quoteDrop").map(m=>m.date).sort().pop()||null; }
 /* when is a message better than a visit? Tier A and cooling B accounts always get the visit. */
 /* quote follow-up ladder: every priced quote gets a fixed series of touches (message / call) until it closes or goes stale at 21 days, so nothing priced is forgotten.
    "pend" = priced, waiting for the customer to approve; "appr" = approved but supply not requested yet (more urgent, with calls) */
-const QT={
-  pend:[[1,"msg","quote"],[4,"msg","quote"],[8,"call"],[14,"msg","quote"],[20,"msg","quoteLast"]],
-  appr:[[1,"msg","quoteAppr"],[3,"call"],[7,"msg","quoteAppr"],[14,"call"],[20,"msg","quoteLast"]]};
-function quoteLadder(q){ return QT[q.stage==="بانتظار التأكيد"?"appr":"pend"]; }
+const QT={ /* at the operations app "approved" is an internal approval, so every open quote is simply "sent, waiting for the customer to confirm"; buyers confirm within ~3 days, so touches are front-loaded */
+  pend:[[1,"msg","quote"],[3,"msg","quote"],[7,"call"],[14,"msg","quoteLast"]]};
+function quoteLadder(q){ return QT.pend; }
 function quoteDone(q){ return S.messages.filter(m=>m.customerId===q.customerId&&m.date>=q.date&&(m.kind==="qcall"||/^quote/.test(m.kind||""))); }
 function quoteTouch(c,day){
-  const q=S.quotes.filter(x=>x.customerId===c.id&&liveQuote(x,day)&&diff(x.date,day)>=1).sort((a,b)=>a.date<b.date?1:-1)[0]; if(!q) return null; /* the newest live quote */
+  const q=S.quotes.filter(x=>x.customerId===c.id&&liveQuote(x,day)&&diff(x.date,day)>=1&&x.stage!=="بانتظار الاعتماد"&&x.stage!=="طلب تسعير").sort((a,b)=>a.date<b.date?1:-1)[0]; if(!q) return null; /* the newest live quote */
   const done=quoteDone(q); if(done.some(m=>m.date===day)) return null; /* one touch a day at most */
   const st=quoteLadder(q)[done.length], age=diff(q.date,day); if(!st||age<st[0]) return null;
   return {q,st,late:age-st[0]};
@@ -2250,7 +2264,7 @@ function waSituation(c){
   }
   /* a brand-new account just registered (met in the field): the welcome message goes out right away, before any visit is logged */
   if(isNew&&!lv0&&!lm&&c.since&&diff(c.since,day)<=7) return {kind:"welcomeNew",u:97}; /* stays on the list for a week until it is sent */
-  const qt=quoteTouch(c,day); if(qt&&qt.st[1]==="msg") return {kind:qt.st[2],item:qt.q.item,u:90+Math.min(qt.late,5)}; /* quote ladder runs on its own clock, not the general 7-day message throttle */
+  const qt=quoteTouch(c,day); if(qt&&qt.st[1]==="msg") return {kind:qt.st[2],item:qt.q.item,qid:qt.q.id,u:90+Math.min(qt.late,5)}; /* quote ladder runs on its own clock, not the general 7-day message throttle */
   if(lm&&diff(lm,day)<(isNew?3:7)) return null; /* new accounts can take a follow-up every 3 days, others every 7 */
   const fm=fmOf(c), d=S.der.get(c.id)||{};
   if(d.lastOrder){ const n=diff(d.lastOrder,day); if(n>=1&&n<=2) return {kind:"delivered",u:80}; }
@@ -2296,7 +2310,7 @@ function updateMsgs(){
   if(q){ const qd=($("#msg-q").value||"").replace(/\D/g,"");
     for(const c of S.customers.values()){ if(normName(cname(c)+" "+(c.name||"")+" "+(c.org||"")).includes(q)||(qd.length>=3&&String(c.phone||"").replace(/\D/g,"").includes(qd))) rows.push(c); if(rows.length>=8) break; } }
   res.innerHTML=q?(rows.length?rows.map(c=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(c))+' '+tierChip(c)+'</b><span class="pw">'+esc(lastMsg(c.id)?"آخر رسالة "+ago(lastMsg(c.id)):"لم تُرسل له رسالة")+'</span></div><button class="btn sm primary" data-act="wa" data-id="'+esc(c.id)+'">رسالة</button></div>').join(""):'<div class="v-sub">لا يوجد عميل بهذا الاسم.</div>'):'<div class="v-sub">اكتب اسم العميل لتجهيز رسالة له.</div>';
-  const cut=addDays(day,-14), sent=S.messages.filter(m=>m.date>=cut).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,15);
+  const cut=addDays(day,-14), sent=S.messages.filter(m=>m.date>=cut&&m.kind!=="quoteDrop").sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,15);
   $("#msg-sent").innerHTML='<h3>أُرسلت مؤخراً <small>14 يوماً</small></h3>'+(sent.length?'<div class="prio">'+sent.map(m=>{ const c=S.customers.get(m.customerId); return '<div class="pi"><div class="pm"><b>'+esc(c?cname(c):"عميل محذوف")+'</b><span class="pw">'+esc(MSG_KIND[m.kind]||"رسالة")+' · '+esc(ago(m.date))+'</span></div></div>'; }).join("")+'</div>':'<div class="v-sub">لم تُرسل رسائل بعد.</div>');
 }
 function openWa(cid,kind){
@@ -2375,6 +2389,7 @@ document.addEventListener("click",async e=>{
   if(a==="edit-cust") return openCustomerForm(id);
   if(a==="coach") return openCoach(id);
   if(a==="open-suggest") return openSuggest();
+  if(a==="quote-drop") return openQuoteDrop(id);
   if(a==="call-log"){ /* the call link opens normally; the touch is logged so the row clears */
     guard(sb.from("messages").insert({id:uuid(),customer_id:id,kind:b.dataset.kind==="qcall"?"qcall":"call",channel:"call",body:"",date:todayStr(),created_by:S.email}).select().single()).then(r=>{ if(r&&r!==true){ putMsg(r); refresh(); } }); return; }
   if(a==="toggle-off"){ const dy=b.dataset.day; b.disabled=true;
