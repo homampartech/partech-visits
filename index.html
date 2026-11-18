@@ -463,7 +463,9 @@ function rowToCust(r){return {id:r.id, person:r.person||"", title:r.title||"", o
 function rowToVisit(r){return {id:r.id, customerId:r.customer_id, date:r.date, time:r.time||"", kind:r.kind||"", purpose:r.purpose||"", state:r.state, result:r.result||"", channel:r.channel||"visit", notes:r.notes||"", next:{text:r.next_text||"", date:r.next_date||""}, checks:r.checks||{}, coach:{text:r.coach_text||"", at:r.coach_at}, by:r.by_email, doneBy:r.done_by, doneAt:r.done_at||"", createdAt:r.created_at||"", unplanned:!!r.unplanned, goal:r.goal||"", goalMet:r.goal_met||"", reason:r.reason||"", people:Array.isArray(r.people)?r.people:[]};}
 function rowToFac(r){return {id:r.id, name:r.name||"", type:r.type||"أخرى", area:r.area||"", location:r.location||"", branches:r.branches==null?1:Number(r.branches), fleet:Number(r.fleet||0), note:r.note||"", marginScore:r.margin_score==null?null:Number(r.margin_score)};}
 function rowToOrder(r){return {id:r.id, visitId:r.visit_id||null, customerId:r.customer_id||null, facilityId:r.facility_id||null, date:r.date, orderNo:r.order_no||"", value:r.value==null?null:Number(r.value), status:r.status||"confirmed", source:r.source||"manual"};}
-function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", by:r.created_by};}
+/* an open price request older than 21 days is treated as cancelled: it is neither shown nor chased */
+function liveQuote(q,day){ return q.status==="open"&&diff(q.date,day||todayStr())<=21; }
+function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", stage:r.stage||"", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", by:r.created_by};}
 function putMsg(r){ if(!S.messages.some(x=>x.id===r.id)) S.messages.push({id:r.id,customerId:r.customer_id||null,kind:r.kind||"",date:r.date,by:r.created_by}); }
 /* price requests come only from the operations app (created_by "ops-sync"); nothing is entered by hand */
 function putQuote(r){ const q=rowToQuote(r); if(q.by!=="ops-sync") return; const i=S.quotes.findIndex(x=>x.id===q.id); if(i>=0) S.quotes[i]=q; else S.quotes.push(q); }
@@ -651,6 +653,7 @@ function mustReason(c,day){
   if(s==="new") return "عميل جديد في مساره: الزيارة جزء من خطته";
   if(fm&&fm.tier==="A") return "فئة A: تُزار حضورياً";
   if(fm&&fm.fading) return "اهتمامه يبرد: يحتاج زيارة";
+  if(s==="lapsed"&&lapsedFlow(c,day)==="visit") return "تواصلنا معه ولم يطلب بعد: حان وقت زيارته";
   if((s==="current"||s==="lapsed")&&fs>=ivl*1.6) return fs>=99?"لم تُسجَّل له زيارة بعد: يحتاج زيارة":"مضى "+fs+" يوماً على آخر زيارة: تجاوز وتيرته";
   return "";
 }
@@ -658,9 +661,17 @@ function messagedToday(c){ const fm=fmOf(c), ppl=fm?fm.people:[c], d=todayStr();
 /* a WhatsApp follow-up is enough (no visit): current B/C accounts that are not cooling and not long overdue for a visit.
    Tier A, cooling accounts and anything overdue by more than 1.6x its rhythm must be visited. */
 function msgOnly(c,day){
-  if(!c||stOf(c.id)!=="current"||dow(day)===5||!phoneOk(normPhone(c.phone))) return false;
-  const fm=fmOf(c); if(!fm||fm.tier==="A"||fm.fading) return false;
+  if(!c||dow(day)===5||!phoneOk(normPhone(c.phone))) return false;
+  const s=stOf(c.id), fm=fmOf(c); if(!fm||fm.tier==="A") return false;
+  if(s==="lapsed") return lapsedFlow(c,day)!=="visit"; /* win-back: message first, then a call, a visit only if no order follows */
+  if(s!=="current"||fm.fading) return false;
   return facSince(c,day)<cadenceDays(c)*1.6;
+}
+/* win-back of a lapsed B/C account: day 0 message, from day 4 a call, from day 10 a visit if he still has not ordered (each logged touch restarts the clock) */
+function lapsedFlow(c,day){
+  const fm=fmOf(c), ppl=fm?fm.people:[c]; let lm=""; for(const p of ppl){ const x=lastMsg(p.id)||""; if(x>lm) lm=x; }
+  if(!lm) return "msg"; const d=diff(lm,day);
+  return d<4?"wait":d<10?"call":"visit";
 }
 /* the customer himself wrote today and a price request was raised for him at the operations app: that is a contact made today */
 function inboundToday(c){ const fm=fmOf(c), ppl=fm?fm.people:[c], d=todayStr(); return S.quotes.some(q=>q.date===d&&ppl.some(p=>p.id===q.customerId)); }
@@ -1039,12 +1050,13 @@ function dailyPriorities(day){
     else if(r.kind==="follow"){ u=95; why=r.reason; }
     else if(fm&&fm.fading&&fm.tier!=="C"){ u=90+(fm.tier==="A"?8:0); why=fm.gap&&fm.dso!=null?"كان يطلب كل "+fm.gap+" يوماً وقد مرّ "+fm.dso+" يوماً":"اهتمامه يتراجع، تحرّك قبل أن تفقده"; }
     else if(stageOf(c.id)==="new2"){ u=80; why="طلبيتان من ثلاث: ثبّته بالثالثة ليصبح حالياً"; }
-    else if(d.status==="lapsed"&&fm&&fm.tier!=="C"){ u=70; why="عميل سابق فئة "+fm.tier+(d.lastOrder?" · آخر طلبية قبل "+diff(d.lastOrder,day)+" يوماً":""); }
+    else if(d.status==="lapsed"&&fm&&fm.tier==="A"){ u=70; why="عميل سابق فئة A"+(d.lastOrder?" · آخر طلبية قبل "+diff(d.lastOrder,day)+" يوماً":""); }
+    else if(d.status==="lapsed"&&fm&&lapsedFlow(c,day)==="visit"){ u=72; why="تواصلنا مع هذا العميل السابق ولم يطلب بعد: حان وقت زيارته"; }
     else continue;
     const k=facKey(c), o=best.get(k); if(!o||u>o.u) best.set(k,{u,why,c,planned:!!dv});
   }
   for(const q of S.quotes){
-    if(q.status!=="open") continue; const age=diff(q.date,day); if(age<2) continue;
+    if(!liveQuote(q,day)) continue; const age=diff(q.date,day); if(age<2) continue;
     const c=S.customers.get(q.customerId); if(!c||msgOnly(c,day)) continue; /* a message follows these up */
     const k=facKey(c), o=best.get(k), dv=visitFor(c.id,day), u=92+Math.min(age,6);
     if(!o||u>o.u) best.set(k,{u,why:"عرض سعر مفتوح منذ "+plural(age,P_DAY)+": "+shorten(q.item,30)+" · تابعه قبل أن يشتري من غيرك",c,planned:!!dv});
@@ -1072,6 +1084,10 @@ function followItems(day){
   /* current accounts that must be visited (tier A, cooling, overdue) are handled by the visit list, except thank-you messages after a visit or delivery */
   const keep=x=>stOf(x.c.id)!=="current"||msgOnly(x.c,day)||["afterVisit","thanksOrder","delivered"].includes(x.s.kind);
   const items=waSuggestions(day,99).filter(keep).map(x=>({c:x.c,kind:x.s.kind,label:WA[x.s.kind].label,why:WA[x.s.kind].why,ch:"msg",u:x.s.u})), seen=new Set(items.map(x=>facKey(x.c)));
+  for(const c of S.customers.values()){ /* lapsed B/C accounts whose message went unanswered: call next */
+    const fm=fmOf(c); if(stOf(c.id)!=="lapsed"||!fm||fm.tier==="A"||seen.has(facKey(c))||!phoneOk(normPhone(c.phone))||lapsedFlow(c,day)!=="call") continue;
+    seen.add(facKey(c)); items.push({c,kind:"cold",label:"اتصال: راسلناه ولم يطلب بعد",why:"",ch:"call",u:58});
+  }
   for(const o of newPlaybook()){
     if(o.late<0||o.touch[1]==="visit"||seen.has(o.k)) continue; seen.add(o.k);
     items.push({c:o.c,kind:o.idx===0?"afterVisit":"newbie",label:o.touch[2],why:"مسار العميل الجديد · اليوم "+o.age,ch:o.touch[1]==="call"?"call":"msg",u:75+Math.min(o.late,10)});
@@ -1081,7 +1097,7 @@ function followItems(day){
 function followHTML(day){
   const L=followItems(day); if(!L.length) return "";
   const row=x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b><span class="pw">'+esc(x.label)+'</span></div>'
-    +(x.ch==="call"?'<a class="btn sm primary" href="tel:'+esc(normPhone(x.c.phone))+'">اتصال</a>':'<button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'">رسالة</button>')+'</div>';
+    +(x.ch==="call"?'<a class="btn sm primary" data-act="call-log" data-id="'+esc(x.c.id)+'" href="tel:'+esc(normPhone(x.c.phone))+'">اتصال</a>':'<button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'">رسالة</button>')+'</div>';
   return '<section class="card"><h3>متابعة بدون زيارة <small>'+L.length+'</small></h3><div class="v-sub">رسالة واحدة تكفي وتُحسب متابعة، ويختفي العميل بعد إرسالها.</div><div class="prio">'+L.slice(0,6).map(row).join("")+'</div>'
     +(L.length>6?'<button class="btn" data-act="tab" data-tab="msgs" style="margin-top:10px;width:100%">باقي الرسائل ('+(L.length-6)+')</button>':'')+'</section>';
 }
@@ -1856,12 +1872,13 @@ function quoteStats(day){
   };
 }
 function quotesHTML(day){
-  const st=quoteStats(day).day, cfg=S.cfg, open=S.quotes.filter(x=>x.status==="open").sort((a,b)=>a.date<b.date?-1:1);
+  const st=quoteStats(day).day, cfg=S.cfg, open=S.quotes.filter(x=>liveQuote(x)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0); /* newest first */
   let h='<section class="card"><h3>طلبات التسعير <small>تلقائية من العمليات · الهدف '+cfg.dailyQuotes+' يومياً وإغلاق '+cfg.dailyWins+'</small></h3>'
    +kpi("طلبات التسعير",st.n,cfg.dailyQuotes)+kpi("إغلاقات ناجحة",st.w,cfg.dailyWins);
-  if(open.length) h+='<h2 class="sec">بانتظار اعتماد العميل <small>'+open.length+'</small></h2><div class="list">'+open.slice(0,8).map(q=>{
-    const c=S.customers.get(q.customerId), age=diff(q.date,todayStr());
-    return '<div class="ord" style="flex-wrap:wrap"><span style="flex:1 1 100%"><b>'+esc(c?cname(c):"—")+'</b> · '+esc(shorten(q.item,40))+(q.value>0?' · '+q.value.toLocaleString("en-US")+' ر.س':'')+' <span class="'+(age>=2?"due":"")+'">'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span></span></div>';
+  if(open.length) h+='<h2 class="sec">تسعيرات تنتظر العميل <small>'+open.length+' · الأحدث أولاً</small></h2><div class="list">'+open.slice(0,8).map(q=>{
+    const c=S.customers.get(q.customerId), age=diff(q.date,todayStr()), appr=q.stage==="بانتظار التأكيد";
+    const tag=appr?'<span class="chip warn" style="background:var(--warn-soft);color:var(--warn)">معتمد · لم يؤكد بعد'+(age>=1?" · تابعه":"")+'</span>':'<span class="chip muted">بانتظار اعتماد العميل</span>';
+    return '<div class="ord" style="flex-wrap:wrap"><span style="flex:1 1 100%"><b>'+esc(c?cname(c):"—")+'</b> · '+esc(shorten(q.item,40))+(q.value>0?' · '+q.value.toLocaleString("en-US")+' ر.س':'')+' <span class="'+(age>=2?"due":"")+'">'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span> '+tag+'</span></div>';
   }).join("")+'</div>';
   return h+'</section>';
 }
@@ -2059,7 +2076,7 @@ function trainHTML(){
 /* ---------- RECOMMENDATIONS: rule-based summary for today and this week (inside the Guide) ---------- */
 function recsHTML(){
   const day=todayStr(), cfg=S.cfg, st=quoteStats(day), ws=weekStart(day), we=addDays(ws,6), fri=dow(day)===5;
-  const open=S.quotes.filter(q=>q.status==="open"), old=open.filter(q=>diff(q.date,day)>=2).sort((a,b)=>a.date<b.date?-1:1);
+  const open=S.quotes.filter(q=>liveQuote(q)), old=open.filter(q=>diff(q.date,day)>=2).sort((a,b)=>a.date<b.date?-1:1);
   const D=[], W=[], M=[];
   if(fri) D.push("اليوم الجمعة، إجازة. استرح وخطط ليوم السبت.");
   else if(isOff(day)) D.push("يوم استثنائي: لا أهداف اليوم.");
@@ -2177,7 +2194,7 @@ function waSituation(c){
     return {kind:lv0.result==="order"?"thanksOrder":"afterVisit",u:96};
   if(lm&&diff(lm,day)<(isNew?3:7)) return null; /* new accounts can take a follow-up every 3 days, others every 7 */
   const fm=fmOf(c), d=S.der.get(c.id)||{};
-  const oq=S.quotes.filter(q=>q.customerId===c.id&&q.status==="open"&&diff(q.date,day)>=1).sort((a,b)=>a.date<b.date?-1:1)[0];
+  const oq=S.quotes.filter(q=>q.customerId===c.id&&liveQuote(q,day)&&diff(q.date,day)>=1).sort((a,b)=>a.date<b.date?1:-1)[0]; /* the newest live quote */
   if(oq) return {kind:"quote",item:oq.item,u:90};
   if(d.lastOrder){ const n=diff(d.lastOrder,day); if(n>=1&&n<=2) return {kind:"delivered",u:80}; }
   if(fm&&(fm.tier==="A"||(fm.tier==="B"&&fm.fading))) return null;
@@ -2188,7 +2205,7 @@ function waSituation(c){
   }
   const lv=S.lastVisit.get(c.id);
   if(stg.startsWith("new")&&lv){ const n=diff(lv,day); if(n>=3&&n<=10) return {kind:"newbie",u:60}; }
-  if(stg==="lapsed"&&(!lv||diff(lv,day)>=21)) return {kind:"cold",u:40};
+  if(stg==="lapsed"&&lapsedFlow(c,day)==="msg") return {kind:"cold",u:60};
   if(stg==="current"&&msgOnly(c,day)&&visitDue(c,day)) return {kind:"checkin",u:55}; /* periodic follow-up by message instead of a visit */
   return null;
 }
@@ -2207,7 +2224,7 @@ function waHTML(day){
    +'<button class="btn" data-act="tab" data-tab="msgs" style="margin-top:10px;width:100%">كل الرسائل'+(all.length>2?' ('+all.length+')':'')+'</button></section>';
 }
 /* messages tab: suggestions, message anyone, recently sent */
-const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد التسليم",quote:"متابعة تسعير",newbie:"عميل جديد",cold:"عميل بعيد",hello:"رسالة عامة",checkin:"متابعة دورية",afterVisit:"بعد الزيارة",thanksOrder:"شكر على الطلبية",interestFollow:"متابعة اهتمام"};
+const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد التسليم",quote:"متابعة تسعير",newbie:"عميل جديد",cold:"عميل بعيد",hello:"رسالة عامة",checkin:"متابعة دورية",call:"اتصال",afterVisit:"بعد الزيارة",thanksOrder:"شكر على الطلبية",interestFollow:"متابعة اهتمام"};
 function msgsShellHTML(){
   return '<section class="card msgsec" id="msg-sug"></section>'
    +'<section class="card msgsec"><h3>رسالة لأي عميل</h3><div class="field"><input id="msg-q" class="input" type="search" placeholder="ابحث بالاسم أو المنشأة أو الجوال" autocomplete="off"></div><div class="prio" id="msg-res"></div></section>'
@@ -2228,7 +2245,7 @@ function updateMsgs(){
 function openWa(cid,kind){
   const c=S.customers.get(cid); if(!c) return;
   if(!phoneOk(normPhone(c.phone))){ toast("أضف رقم جوال صحيحاً لهذا العميل أولاً"); return; }
-  const s=kind?{kind,item:((S.quotes.filter(q=>q.customerId===cid&&q.status==="open")[0])||{}).item||""}:(waSituation(c)||{kind:"hello"});
+  const s=kind?{kind,item:((S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0])||{}).item||""}:(waSituation(c)||{kind:"hello"});
   let seed=0, logged=false;
   const text=()=>waText(c,s.kind,s.item,seed), lm=lastMsg(cid);
   const href=t=>waLink(c.phone)+"?text="+encodeURIComponent(t);
@@ -2301,6 +2318,8 @@ document.addEventListener("click",async e=>{
   if(a==="edit-cust") return openCustomerForm(id);
   if(a==="coach") return openCoach(id);
   if(a==="open-suggest") return openSuggest();
+  if(a==="call-log"){ /* the call link opens normally; the touch is logged so the row clears */
+    guard(sb.from("messages").insert({id:uuid(),customer_id:id,kind:"call",channel:"call",body:"",date:todayStr(),created_by:S.email}).select().single()).then(r=>{ if(r&&r!==true){ putMsg(r); refresh(); } }); return; }
   if(a==="toggle-off"){ const dy=b.dataset.day; b.disabled=true;
     const cur=await guard(sb.from("config").select("data").eq("id",1).maybeSingle()); const d=Object.assign({},(cur&&cur.data)||{});
     const arr=(d.offDays||[]).filter(x=>x!==dy); if(!(d.offDays||[]).includes(dy)) arr.push(dy); d.offDays=arr;
