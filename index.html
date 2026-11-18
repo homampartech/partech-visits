@@ -2008,7 +2008,7 @@ function newPlaybook(){
 function firstVisitDue(){
   const day=todayStr(), out=[], seen=new Set();
   for(const c of S.customers.values()){
-    if(stOf(c.id)!=="new"||S.lastVisit.get(c.id)||!c.since||diff(c.since,day)>7||diff(c.since,day)<0) continue;
+    if(stOf(c.id)!=="new"||S.lastVisit.get(c.id)||!c.since||diff(c.since,day)>14||diff(c.since,day)<0) continue;
     const k=facKey(c); if(seen.has(k)) continue; seen.add(k); out.push(c.id);
   }
   return out;
