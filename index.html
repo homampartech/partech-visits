@@ -465,7 +465,8 @@ function rowToFac(r){return {id:r.id, name:r.name||"", type:r.type||"أخرى", 
 function rowToOrder(r){return {id:r.id, visitId:r.visit_id||null, customerId:r.customer_id||null, facilityId:r.facility_id||null, date:r.date, orderNo:r.order_no||"", value:r.value==null?null:Number(r.value), status:r.status||"confirmed", source:r.source||"manual"};}
 function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", by:r.created_by};}
 function putMsg(r){ if(!S.messages.some(x=>x.id===r.id)) S.messages.push({id:r.id,customerId:r.customer_id||null,kind:r.kind||"",date:r.date,by:r.created_by}); }
-function putQuote(r){ const q=rowToQuote(r); const i=S.quotes.findIndex(x=>x.id===q.id); if(i>=0) S.quotes[i]=q; else S.quotes.push(q); }
+/* price requests come only from the operations app (created_by "ops-sync"); nothing is entered by hand */
+function putQuote(r){ const q=rowToQuote(r); if(q.by!=="ops-sync") return; const i=S.quotes.findIndex(x=>x.id===q.id); if(i>=0) S.quotes[i]=q; else S.quotes.push(q); }
 function putFac(r){ S.facilities.set(r.id,rowToFac(r)); }
 function putOrder(r){ const o=rowToOrder(r); const i=S.orders.findIndex(x=>x.id===o.id); if(i>=0) S.orders[i]=o; else S.orders.push(o); }
 function dropOrder(id){ S.orders=S.orders.filter(x=>x.id!==id); S.costs.delete(id); }
@@ -863,7 +864,7 @@ async function loadAll(retried){
       sb.from("messages").select("*")
     ]);
     S.messages=[]; ((msgs.error?[]:msgs.data)||[]).forEach(putMsg);
-    S.quotes = ((qts.error?[]:qts.data)||[]).map(rowToQuote);
+    S.quotes = ((qts.error?[]:qts.data)||[]).map(rowToQuote).filter(q=>q.by==="ops-sync");
     if(c.error) throw c.error; if(team.error) throw team.error;
     if(fac.error||ord.error) throw (fac.error||ord.error);
     S.facilities = new Map(fac.data.map(r=>[r.id,rowToFac(r)]));
@@ -1266,7 +1267,7 @@ function guideHTML(){
   +'<div class="card" id="recs"></div>'
   +'<div class="card"><h3>الخطة باختصار</h3><div style="font-size:14px;display:flex;flex-direction:column;gap:6px">'
   +'<div><b>'+S.cfg.dailyTarget+' زيارات كل يوم</b> بين حاليين وسابقين وجدد، ووتيرة الزيارة حسب فئة العميل: A كل أسبوعين، وB شهرياً، وC كل 5 إلى 6 أسابيع، وبينها رسالة أو اتصال. والعميل الجديد يُزار أسبوعياً حتى طلبيته الثالثة، وتصله رسالة شكر بعد الزيارة مباشرة ثم متابعة بعد 3 أيام.</div>'
-  +'<div><b>'+S.cfg.dailyQuotes+' طلبات تسعير يومياً</b> من عملائك وإغلاق <b>'+S.cfg.dailyWins+'</b> منها على الأقل (نحو '+S.cfg.workDaysMonth+' يوم عمل في الشهر، والجمعة إجازة). سجّل كل طلب سعر من تبويب «اليوم»، وأغلقه بطلبية أو سجّل سبب عدم الإغلاق.</div>'
+  +'<div><b>'+S.cfg.dailyQuotes+' طلبات تسعير يومياً</b> من عملائك وإغلاق <b>'+S.cfg.dailyWins+'</b> منها على الأقل (نحو '+S.cfg.workDaysMonth+' يوم عمل في الشهر، والجمعة إجازة). لا تُدخل شيئاً بيدك: طلبات التسعير وإغلاقاتها والطلبيات تأتي تلقائياً من برنامج العمليات.</div>'
   +'<div><b>'+S.cfg.weeklyNew+' زيارة أسبوعياً لعملاء جدد</b>، والهدف تحويل '+S.cfg.monthlyConv+' منهم إلى حاليين كل شهر.</div>'
   +'<div><b>مسار العميل الجديد (90 يوماً):</b> زيارة ثم رسالة شكر في اليوم نفسه، ورسالة فيها قيمة في اليوم 3، وزيارة أو اتصال في اليوم 7 مع طلب تجربة صغيرة، واتصال في 14، وزيارة في 21، ومراجعة في 30، ثم رسالة كل أسبوعين وزيارة شهرية. يظهر لك ما هو مستحق اليوم في بطاقة «عملاء جدد: لمسة اليوم»، وبعد 90 يوماً بلا طلبية يتحول إلى متابعة بطيئة.</div>'
   +'<div><b>الجديد يصبح حالياً</b> بعد '+S.cfg.ordersToConvert+' طلبيات. <b>الحالي يصبح سابقاً</b> إذا مر '+S.cfg.lapsedDays+' يوماً على آخر طلبية. <b>السابق يعود حالياً</b> بأول طلبية جديدة.</div></div></div>'
@@ -1673,7 +1674,6 @@ function openCustomer(id){
     title: esc(cname(c)), sub: esc(facOf(c).name||""),
     body:draw(),
     foot:'<button class="btn primary" id="cs-plan"></button><button class="btn" data-act="edit-cust" data-id="'+esc(id)+'">تعديل البيانات</button>'
-      +'<button class="btn" data-act="new-quote" data-id="'+esc(id)+'">طلب تسعير</button>'
       +'<button class="btn" data-act="add-person" data-fid="'+esc(c.facilityId||"")+'">إضافة شخص من المنشأة</button>'
       +(c.facilityId?'<button class="btn" data-act="edit-fac" data-fid="'+esc(c.facilityId)+'">تعديل المنشأة</button>':'')
       +(S.isOwner?'<button class="btn" data-act="toggle-imp" data-id="'+esc(id)+'">'+(c.important?"إلغاء تمييز العميل":"تمييز كعميل مهم ★")+'</button>':''),
@@ -1819,14 +1819,13 @@ function quoteStats(day){
 }
 function quotesHTML(day){
   const st=quoteStats(day).day, cfg=S.cfg, open=S.quotes.filter(x=>x.status==="open").sort((a,b)=>a.date<b.date?-1:1);
-  let h='<section class="card"><h3>طلبات التسعير <small>الهدف '+cfg.dailyQuotes+' يومياً وإغلاق '+cfg.dailyWins+'</small></h3>'
+  let h='<section class="card"><h3>طلبات التسعير <small>تلقائية من العمليات · الهدف '+cfg.dailyQuotes+' يومياً وإغلاق '+cfg.dailyWins+'</small></h3>'
    +kpi("طلبات التسعير",st.n,cfg.dailyQuotes)+kpi("إغلاقات ناجحة",st.w,cfg.dailyWins);
-  if(open.length) h+='<h2 class="sec">بانتظار الإغلاق <small>'+open.length+'</small></h2><div class="list">'+open.slice(0,8).map(q=>{
+  if(open.length) h+='<h2 class="sec">بانتظار اعتماد العميل <small>'+open.length+'</small></h2><div class="list">'+open.slice(0,8).map(q=>{
     const c=S.customers.get(q.customerId), age=diff(q.date,todayStr());
-    return '<div class="ord" style="flex-wrap:wrap"><span style="flex:1 1 100%"><b>'+esc(c?cname(c):"—")+'</b> · '+esc(shorten(q.item,40))+(q.value>0?' · '+q.value.toLocaleString("en-US")+' ر.س':'')+' <span class="'+(age>=2?"due":"")+'">'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span></span>'
-     +'<button class="btn sm primary" data-act="quote-win" data-id="'+esc(q.id)+'">أُغلقت ✓</button><button class="btn sm" data-act="quote-lose" data-id="'+esc(q.id)+'">لم تُغلق</button></div>';
+    return '<div class="ord" style="flex-wrap:wrap"><span style="flex:1 1 100%"><b>'+esc(c?cname(c):"—")+'</b> · '+esc(shorten(q.item,40))+(q.value>0?' · '+q.value.toLocaleString("en-US")+' ر.س':'')+' <span class="'+(age>=2?"due":"")+'">'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span></span></div>';
   }).join("")+'</div>';
-  return h+'<button class="btn primary" data-act="new-quote">'+ICON.plus.replace("<svg",'<svg width="18" height="18"')+'طلب تسعير جديد</button></section>';
+  return h+'</section>';
 }
 function openQuote(cid){
   let sel=cid||null;
