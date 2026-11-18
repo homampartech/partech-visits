@@ -1912,7 +1912,7 @@ function quoteStats(day){
 }
 function quotesHTML(day){
   const st=quoteStats(day).day, cfg=S.cfg, due=quoteDue(day), dueBy=new Map(due.map(x=>[x.q.id,x]));
-  const open=S.quotes.filter(x=>liveQuote(x)).sort((a,b)=>{ const da=dueBy.has(a.id), db=dueBy.has(b.id); if(da!==db) return da?-1:1; return da?(a.date<b.date?-1:a.date>b.date?1:0):(a.date<b.date?1:a.date>b.date?-1:0); }); /* due follow-ups first (oldest first), then the rest newest first */
+  const open=S.quotes.filter(x=>liveQuote(x)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0); /* newest first, always */
   let h='<section class="card" id="quotes-sec"><h3>طلبات التسعير <small>تلقائية من العمليات · الهدف '+cfg.dailyQuotes+' يومياً وإغلاق '+cfg.dailyWins+'</small></h3>'
    +kpi("طلبات التسعير",st.n,cfg.dailyQuotes)+kpi("إغلاقات ناجحة",st.w,cfg.dailyWins);
   if(open.length) h+='<h2 class="sec">تسعيرات تنتظر العميل <small>'+open.length+(due.length?' · '+due.length+' مستحقة المتابعة':'')+' · تُغلق تلقائياً بعد 21 يوماً</small></h2><div class="list">'+open.slice(0,30).map(q=>{
