@@ -1090,7 +1090,7 @@ function followItems(day){
   }
   for(const o of newPlaybook()){
     if(o.late<0||o.touch[1]==="visit"||seen.has(o.k)) continue; seen.add(o.k);
-    items.push({c:o.c,kind:o.idx===0?"afterVisit":"newbie",label:o.touch[2],why:"مسار العميل الجديد · اليوم "+o.age,ch:o.touch[1]==="call"?"call":"msg",u:75+Math.min(o.late,10)});
+    items.push({c:o.c,kind:o.idx===0?"welcomeNew":"newbie",label:o.touch[2],why:"مسار العميل الجديد · اليوم "+o.age,ch:o.touch[1]==="call"?"call":"msg",u:75+Math.min(o.late,10)});
   }
   return items.sort((a,b)=>b.u-a.u);
 }
@@ -1603,7 +1603,7 @@ async function saveResult(v,stg,others){
   }
   toast(msg); closeSheet();
   /* a brand-new account gets a thank-you message right after the visit, already filled in */
-  if(!abs&&res!=="notnow"&&stageOf(v.customerId).startsWith("new")) setTimeout(()=>{ const c=S.customers.get(v.customerId); if(c&&waSituation(c)) openWa(v.customerId); },500);
+  if(stageOf(v.customerId).startsWith("new")) setTimeout(()=>{ const c=S.customers.get(v.customerId); if(c&&waSituation(c)) openWa(v.customerId); },500);
 }
 
 /* orders: one row per person who ordered in a visit; margin is stored apart and only the manager can read it */
@@ -2007,7 +2007,7 @@ function newCustHTML(){
   const L=newPlaybook().filter(o=>o.late>=-1); if(!L.length) return "";
   const rows=L.slice(0,6).map(o=>{
     const ch=o.touch[1], chip=o.late>0?'<span class="chip" style="background:var(--bad-soft);color:var(--bad)">متأخرة '+plural(o.late,P_DAY)+'</span>':o.late===0?'<span class="chip order">اليوم</span>':'<span class="chip muted">غداً</span>';
-    const btn=ch==="msg"?'<button class="btn sm primary" data-act="wa" data-id="'+esc(o.c.id)+'" data-kind="'+(o.idx===0?"afterVisit":"newbie")+'">رسالة</button>'
+    const btn=ch==="msg"?'<button class="btn sm primary" data-act="wa" data-id="'+esc(o.c.id)+'" data-kind="'+(o.idx===0?"welcomeNew":"newbie")+'">رسالة</button>'
       :ch==="visit"?'<button class="btn sm primary" data-act="prio-add" data-id="'+esc(o.c.id)+'">أضف للخطة</button>'
       :'<a class="btn sm primary" href="tel:'+esc(normPhone(o.c.phone))+'">اتصال</a>';
     return '<div class="pi"><div class="pm"><b>'+esc(o.name)+' '+tierChip(o.c)+'</b><span class="pw">اليوم '+o.age+' من مسار العميل الجديد · '+esc(o.touch[2])+'</span>'+chip+'</div>'+btn+'</div>';
@@ -2150,6 +2150,18 @@ const WA = {
     "السلام عليكم {n}، معك {s} من بارتك. حبيت أطمّن عليك وأسأل إذا تحتاج أي قطع هالأسبوع، أنا حاضر.",
     "هلا {n}، {s} من بارتك. فيه أي قطعة أو سعر تبي أجهزه لك؟ أرسل لي وأرد عليك بسرعة.",
     "مساء الخير {n}، معك {s} من بارتك. إذا عندك طلب جديد أو استفسار عن أي صنف أنا جاهز."]},
+  welcomeNew:{label:"رسالة ترحيب لعميل جديد",why:"أول رسالة خلال ساعات من الزيارة: تعريف بما نقدّمه وطلب واضح (اسم القطعة وموديل السيارة)",t:[
+    "السلام عليكم {n}، معك {s} من بارتك لقطع الغيار. سعدت بالتعرف عليك اليوم. نوفّر قطعاً أصلية وبديلة بأسعار منافسة وتوصيل سريع، وأسعّر لك أي قطعة خلال دقائق: أرسل لي اسمها وموديل السيارة. {recap}هذا رقمي للتواصل المباشر.",
+    "هلا {n}، {s} من بارتك. شكراً على وقتك اليوم. إذا عندك قائمة قطع تحتاجها هالأسبوع أرسلها وأعطيك عرض سعر سريع لتجرّب معنا أول طلبية. {recap}أي استفسار أنا حاضر.",
+    "مرحباً {n}، معك {s} من بارتك. تشرفت بمعرفتك. نخدم الورش بقطع مضمونة وأسعار واضحة، وأي سعر تحتاجه يوصلك بسرعة. {recap}أرسل لي ما تحتاجه متى شئت."]},
+  missedNew:{label:"مررنا ولم نلتقِ",why:"مررتَ عليه ولم تجده: رسالة قصيرة تترك رقمك وتعرض التسعير",t:[
+    "السلام عليكم {n}، معك {s} من بارتك لقطع الغيار. مررتُ عليك اليوم ولم نلتقِ. هذا رقمي، وأي قطعة تحتاجها أرسل لي اسمها وموديل السيارة وأسعّرها لك فوراً.",
+    "هلا {n}، {s} من بارتك. زرتكم اليوم ولم أجدك، وأحب أعرّفك بخدمتنا. أرسل لي أي قطعة تحتاجها وأرد عليك بالسعر بسرعة.",
+    "مساء الخير {n}، معك {s} من بارتك. مررتُ ولم يتيسر اللقاء، متى يناسبك أمرّ مرة ثانية؟ وهذا رقمي لأي طلب."]},
+  softNew:{label:"شكر دون إلحاح",why:"لم يكن مهتماً الآن: شكر مهذب وباب مفتوح بلا إلحاح",t:[
+    "السلام عليكم {n}، معك {s} من بارتك. شكراً على وقتك اليوم. متى احتجت أي قطعة أو سعراً أنا حاضر، ولن أكرر عليك.",
+    "هلا {n}، {s} من بارتك. أقدّر وقتك. إذا احتجت لاحقاً أي صنف أرسل لي وأسعّره لك مباشرة.",
+    "مرحباً {n}، معك {s} من بارتك. سعدت بلقائك. رقمي عندك لأي طلب في أي وقت."]},
   afterVisit:{label:"رسالة بعد الزيارة",why:"شكر خلال ساعات من الزيارة يثبّت الانطباع، ويبقى رقمك عنده",t:[
     "السلام عليكم {n}، معك {s} من بارتك. سعدت بزيارتك اليوم وشكراً على وقتك. {recap}هذا رقمي للتواصل المباشر، أرسل لي أي قطعة تحتاجها وأسعّرها لك فوراً.",
     "هلا {n}، {s} من بارتك. شكراً على استقبالك. {recap}متى ما احتجت أي قطعة أرسل اسمها وموديل السيارة وأرد عليك بأسرع وقت.",
@@ -2190,8 +2202,10 @@ function waSituation(c){
   if(inboundToday(c)) return null; /* he is already in conversation with us today */
   const lm=lastMsg(c.id), stg=stageOf(c.id), lv0=lastDoneVisit(c.id), isNew=stg.startsWith("new");
   /* within a day of a visit that went well (or any visit to a new account): thank him, once */
-  if(lv0&&diff(lv0.date,day)<=1&&lv0.result!=="absent"&&lv0.result!=="notnow"&&(lv0.result==="order"||lv0.result==="interested"||isNew)&&(!lm||lm<lv0.date))
-    return {kind:lv0.result==="order"?"thanksOrder":"afterVisit",u:96};
+  if(lv0&&diff(lv0.date,day)<=1&&(!lm||lm<lv0.date)){
+    if(isNew) return {kind:lv0.result==="absent"?"missedNew":lv0.result==="notnow"?"softNew":lv0.result==="order"?"thanksOrder":"welcomeNew",u:96}; /* a new account is always written to within a day, whatever the result */
+    if(lv0.result==="order"||lv0.result==="interested") return {kind:lv0.result==="order"?"thanksOrder":"afterVisit",u:96};
+  }
   if(lm&&diff(lm,day)<(isNew?3:7)) return null; /* new accounts can take a follow-up every 3 days, others every 7 */
   const fm=fmOf(c), d=S.der.get(c.id)||{};
   const oq=S.quotes.filter(q=>q.customerId===c.id&&liveQuote(q,day)&&diff(q.date,day)>=1).sort((a,b)=>a.date<b.date?1:-1)[0]; /* the newest live quote */
@@ -2224,7 +2238,7 @@ function waHTML(day){
    +'<button class="btn" data-act="tab" data-tab="msgs" style="margin-top:10px;width:100%">كل الرسائل'+(all.length>2?' ('+all.length+')':'')+'</button></section>';
 }
 /* messages tab: suggestions, message anyone, recently sent */
-const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد التسليم",quote:"متابعة تسعير",newbie:"عميل جديد",cold:"عميل بعيد",hello:"رسالة عامة",checkin:"متابعة دورية",call:"اتصال",afterVisit:"بعد الزيارة",thanksOrder:"شكر على الطلبية",interestFollow:"متابعة اهتمام"};
+const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد التسليم",quote:"متابعة تسعير",newbie:"عميل جديد",cold:"عميل بعيد",hello:"رسالة عامة",checkin:"متابعة دورية",call:"اتصال",welcomeNew:"ترحيب بعميل جديد",missedNew:"مررنا ولم نلتقِ",softNew:"شكر دون إلحاح",afterVisit:"بعد الزيارة",thanksOrder:"شكر على الطلبية",interestFollow:"متابعة اهتمام"};
 function msgsShellHTML(){
   return '<section class="card msgsec" id="msg-sug"></section>'
    +'<section class="card msgsec"><h3>رسالة لأي عميل</h3><div class="field"><input id="msg-q" class="input" type="search" placeholder="ابحث بالاسم أو المنشأة أو الجوال" autocomplete="off"></div><div class="prio" id="msg-res"></div></section>'
