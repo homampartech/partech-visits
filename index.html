@@ -643,6 +643,16 @@ function planCtx(day){
 function cadenceDays(c){ const fm=fmOf(c); return fm?(fm.tier==="A"?14:fm.tier==="B"?28:42):28; }
 function facSince(c,day){ const fm=fmOf(c), ppl=fm?fm.people:[c]; let lv=""; for(const p of ppl){ const x=S.lastVisit.get(p.id)||""; if(x>lv) lv=x; } return lv?Math.max(0,diff(lv,day)):99; }
 function visitDue(c,day){ return facSince(c,day)>=cadenceDays(c)*0.6; }
+function messagedToday(c){ const fm=fmOf(c), ppl=fm?fm.people:[c], d=todayStr(); return ppl.some(p=>lastMsg(p.id)===d); }
+/* a WhatsApp follow-up is enough (no visit): current B/C accounts that are not cooling and not long overdue for a visit.
+   Tier A, cooling accounts and anything overdue by more than 1.6x its rhythm must be visited. */
+function msgOnly(c,day){
+  if(!c||stOf(c.id)!=="current"||dow(day)===5||!phoneOk(normPhone(c.phone))) return false;
+  const fm=fmOf(c); if(!fm||fm.tier==="A"||fm.fading) return false;
+  return facSince(c,day)<cadenceDays(c)*1.6;
+}
+/* a planned visit that the message already covered disappears from the day */
+function hiddenByMsg(v,day){ if(v.state!=="planned"||day!==todayStr()) return false; const c=S.customers.get(v.customerId); return !!c&&msgOnly(c,day)&&messagedToday(c); }
 /* priority score and a one-line reason for each customer */
 function scoreCustomer(c, day, ctx){
   const s=stOf(c.id), d=S.der.get(c.id)||{count:0,lastOrder:null};
@@ -685,7 +695,9 @@ function candidates(day){
   for(const c of S.customers.values()){
     if(visitFor(c.id,day)) continue;
     if(c.facilityId && planned.has(facKey(c))) continue; /* one visit per facility per day */
-    out.push(Object.assign({id:c.id,c,fk:facKey(c),area:c.area||""},scoreCustomer(c,day,ctx)));
+    const sc=scoreCustomer(c,day,ctx);
+    if(!sc.carryVisit&&!sc.followVisit&&msgOnly(c,day)) continue; /* these are followed up by WhatsApp, not visited */
+    out.push(Object.assign({id:c.id,c,fk:facKey(c),area:c.area||""},sc));
   }
   return out;
 }
@@ -717,6 +729,9 @@ function suggestPlan(day, areaPref){
   const curDue=by("current");
   const nOf=st=>pick.filter(x=>stOf(x.id)===st).length;
   take(by("carry"),99); take(by("follow"),99);
+  /* the necessary visits first: new-customer visit touches and the day's priorities */
+  const nvSet=new Set(newPlaybook().filter(o=>o.touch[1]==="visit"&&o.late>=0).map(o=>o.c.id)), prSet=new Set(dailyPriorities(day).map(x=>x.c.id));
+  take(cands.filter(x=>nvSet.has(x.id)||prSet.has(x.id)).sort(desc),99);
   take(by("new").filter(x=>!S.lastVisit.get(x.id)),newToday);
   take(curDue,Math.max(0,Math.min(Math.ceil(curDue.length/left),Math.ceil(slots*0.6)-nOf("current"))));
   take(by("lapsed"),Math.max(0,Math.max(2,Math.ceil(slots*0.3))-nOf("lapsed")));
@@ -933,7 +948,7 @@ function renderView(){
 
 /* ---------- TODAY ---------- */
 function todayHTML(){
-  const day=S.day, t=todayStr(), list=visitsOn(day), cfg=S.cfg;
+  const day=S.day, t=todayStr(), list=visitsOn(day).filter(v=>!hiddenByMsg(v,day)), cfg=S.cfg;
   const done=list.filter(v=>v.state==="done"), orders=done.filter(v=>v.result==="order").length;
   const ws=weekStart(day);
   const weekNew=S.visits.filter(v=>v.state==="done"&&v.kind==="new"&&v.date>=ws&&v.date<=addDays(ws,6)).length;
@@ -949,27 +964,29 @@ function todayHTML(){
    +'<button class="iconbtn" data-act="day-next" aria-label="اليوم التالي">'+ICON.next+'</button></div>'
    +'<div class="rings">'+ring(done.length,cfg.dailyTarget,"var(--accent)","زيارات")+ring(quoteStats(day).day.n,cfg.dailyQuotes,"var(--orange)","تسعير")+ring(quoteStats(day).day.w,cfg.dailyWins,"var(--good)","إغلاق")+'</div>'
    +achLine(day)
-   +(!list.length?'':balanceHTML(list.filter(v=>v.state!=="missed").map(v=>v.customerId),day))
-   +(list.length&&!isFri?'<button class="btn primary" data-act="open-suggest">'+ICON.spark.replace("<svg",'<svg width="18" height="18"')+'أكمل الخطة تلقائياً</button>':'')
-   +'<div class="row grow"><button class="btn" data-act="open-planner">'+(list.length?"تعديل الخطة":"اختيار يدوي")+'</button><button class="btn" data-act="open-log">زيارة غير مخططة</button></div>'
    +(isOff(day)?'<div class="credit">يوم استثنائي: لا تُحتسب عليه أهداف اليوم.</div>':'')
-   +(S.isOwner&&!isFri?'<button class="btn sm ghost" data-act="toggle-off" data-day="'+esc(day)+'">'+(isOff(day)?"إلغاء الاستثناء":"علّم اليوم استثنائياً (مرض أو إجازة أو تدريب)")+'</button>':'')
    +'</section>';
   if(day===t){
     const co=carryItems(day);
     if(co.length) h+='<section class="notice carry"><div><b>لديك '+plural(co.length,P_VISIT)+' مخططة لم تُنفَّذ في أيام سابقة</b><br>'+esc(co.slice(0,4).map(x=>cname(x.c)).join("، ")+(co.length>4?" وغيرهم":""))+'</div>'
       +'<div class="row grow"><button class="btn sm primary" data-act="carry-move">رحّلها لليوم</button><button class="btn sm" data-act="carry-drop">تجاهلها</button></div></section>';
   }
-  if(day===t && dow(day)!==5) h+=prioHTML(day)+newCustHTML();
+  /* 1) visits: necessary visits first, then the day's list (or the generated plan) */
   if(isFri && !list.length) h+='<div class="empty"><b>الجمعة يوم راحة</b>لا توجد زيارات مخططة.</div>';
   else if(!list.length) h+=day>=t?autoPlanHTML(day):'<div class="empty"><b>لا توجد زيارات مخططة لهذا اليوم</b></div>';
   else {
+    if(day===t && !isFri) h+=prioHTML(day);
     const p=list.filter(v=>v.state==="planned"), d=list.filter(v=>v.state!=="planned");
-    if(p.length) h+='<h2 class="sec">بانتظار التنفيذ <small>'+p.length+' زيارة</small></h2><div class="list">'+p.map(v=>visitCard(v)).join("")+'</div>';
+    if(p.length) h+='<h2 class="sec">زيارات بانتظار التنفيذ <small>'+p.length+'</small></h2><div class="list">'+p.map(v=>visitCard(v)).join("")+'</div>';
     if(d.length) h+='<h2 class="sec">تم تسجيلها <small>'+d.length+'</small></h2><div class="list">'+d.map(v=>visitCard(v)).join("")+'</div>';
   }
+  /* 2) follow-ups that need no visit: messages and calls */
+  if(day===t && !isFri) h+=followHTML(day);
+  /* 3) price requests */
   if(dow(day)!==5||day===t) h+=quotesHTML(day);
-  h+=waHTML(day);
+  /* 4) secondary actions in one quiet row */
+  if(!isFri) h+='<div class="row grow"><button class="btn" data-act="open-planner">'+(list.length?"تعديل الخطة":"اختيار يدوي")+'</button><button class="btn" data-act="open-log">زيارة غير مخططة</button></div>';
+  if(S.isOwner&&!isFri) h+='<button class="btn sm ghost" data-act="toggle-off" data-day="'+esc(day)+'">'+(isOff(day)?"إلغاء الاستثناء":"علّم اليوم استثنائياً (مرض أو إجازة أو تدريب)")+'</button>';
   if(day===t) h+=qualityBanner();
   return h;
 }
@@ -990,12 +1007,12 @@ function dailyPriorities(day){
   }
   for(const q of S.quotes){
     if(q.status!=="open") continue; const age=diff(q.date,day); if(age<2) continue;
-    const c=S.customers.get(q.customerId); if(!c) continue;
+    const c=S.customers.get(q.customerId); if(!c||msgOnly(c,day)) continue; /* a message follows these up */
     const k=facKey(c), o=best.get(k), dv=visitFor(c.id,day), u=92+Math.min(age,6);
     if(!o||u>o.u) best.set(k,{u,why:"عرض سعر مفتوح منذ "+plural(age,P_DAY)+": "+shorten(q.item,30)+" · تابعه قبل أن يشتري من غيرك",c,planned:!!dv});
   }
   for(const o of newPlaybook()){
-    if(o.late<1) continue; const c=o.c, dv=visitFor(c.id,day), k=facKey(c), cur=best.get(k), u=89+Math.min(o.late,5);
+    if(o.late<1||o.touch[1]!=="visit") continue; const c=o.c, dv=visitFor(c.id,day), k=facKey(c), cur=best.get(k), u=89+Math.min(o.late,5);
     if(!cur||u>cur.u) best.set(k,{u,why:"لمسة متأخرة "+plural(o.late,P_DAY)+": "+o.touch[2],c,planned:!!dv});
   }
   for(const o of oppsList()){
@@ -1004,12 +1021,31 @@ function dailyPriorities(day){
   }
   return [...best.values()].sort((a,b)=>b.u-a.u).slice(0,3);
 }
+/* necessary visits that are not yet in the plan (the ones already planned show in the visit list) */
 function prioHTML(day){
-  const items=dailyPriorities(day); if(!items.length) return "";
-  return '<section class="card"><h3>أولويات اليوم <small>لا تفوّتها</small></h3><div class="prio">'
+  const items=dailyPriorities(day).filter(x=>!x.planned); if(!items.length) return "";
+  return '<section class="card"><h3>زيارات ضرورية <small>ما زالت خارج الخطة</small></h3><div class="prio">'
    +items.map(x=>'<div class="pi"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b><span class="pw">'+esc(facOf(x.c).name)+'</span><span class="pw">'+esc(x.why)+'</span></div>'
-     +(x.planned?'<span class="chip order">✓ في الخطة</span>':'<button class="btn sm primary" data-act="prio-add" data-id="'+esc(x.c.id)+'">أضف للخطة</button>')+'</div>').join("")
+     +'<button class="btn sm primary" data-act="prio-add" data-id="'+esc(x.c.id)+'">أضف للخطة</button></div>').join("")
    +'</div></section>';
+}
+/* one list of follow-ups that need no visit: WhatsApp messages and calls; a row disappears once the message is sent */
+function followItems(day){
+  /* current accounts that must be visited (tier A, cooling, overdue) are handled by the visit list, except thank-you messages after a visit or delivery */
+  const keep=x=>stOf(x.c.id)!=="current"||msgOnly(x.c,day)||["afterVisit","thanksOrder","delivered"].includes(x.s.kind);
+  const items=waSuggestions(day,99).filter(keep).map(x=>({c:x.c,kind:x.s.kind,label:WA[x.s.kind].label,why:WA[x.s.kind].why,ch:"msg",u:x.s.u})), seen=new Set(items.map(x=>facKey(x.c)));
+  for(const o of newPlaybook()){
+    if(o.late<0||o.touch[1]==="visit"||seen.has(o.k)) continue; seen.add(o.k);
+    items.push({c:o.c,kind:o.idx===0?"afterVisit":"newbie",label:o.touch[2],why:"مسار العميل الجديد · اليوم "+o.age,ch:o.touch[1]==="call"?"call":"msg",u:75+Math.min(o.late,10)});
+  }
+  return items.sort((a,b)=>b.u-a.u);
+}
+function followHTML(day){
+  const L=followItems(day); if(!L.length) return "";
+  const row=x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b><span class="pw">'+esc(x.label)+'</span></div>'
+    +(x.ch==="call"?'<a class="btn sm primary" href="tel:'+esc(normPhone(x.c.phone))+'">اتصال</a>':'<button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'">رسالة</button>')+'</div>';
+  return '<section class="card"><h3>متابعة بدون زيارة <small>'+L.length+'</small></h3><div class="v-sub">رسالة واحدة تكفي وتُحسب متابعة، ويختفي العميل بعد إرسالها.</div><div class="prio">'+L.slice(0,6).map(row).join("")+'</div>'
+    +(L.length>6?'<button class="btn" data-act="tab" data-tab="msgs" style="margin-top:10px;width:100%">باقي الرسائل ('+(L.length-6)+')</button>':'')+'</section>';
 }
 function incompleteOrders(){ return []; } /* orders now come only from the operations app, nothing is entered by hand */
 function qualityBanner(){
@@ -2056,6 +2092,10 @@ const WA = {
     "السلام عليكم {n}، معك {s} من بارتك. مرّ وقت ما سمعنا منك واشتقنا لخدمتك. إذا عندك أي قطع تدور عليها أنا حاضر.",
     "هلا {n}، {s} من بارتك. حبيت أسلّم عليك وأعرف إذا فيه شيء نقدر نخدمك فيه هالفترة.",
     "مساء الخير {n}، معك {s} من بارتك. وصلنا أصناف جديدة وأسعار منافسة، إذا حاب أرسل لك التفاصيل."]},
+  checkin:{label:"متابعة دورية بالرسالة",why:"رسالة دورية تكفي بدل الزيارة وتُحسب متابعة",t:[
+    "السلام عليكم {n}، معك {s} من بارتك. حبيت أطمّن عليك وأسأل إذا تحتاج أي قطع هالأسبوع، أنا حاضر.",
+    "هلا {n}، {s} من بارتك. فيه أي قطعة أو سعر تبي أجهزه لك؟ أرسل لي وأرد عليك بسرعة.",
+    "مساء الخير {n}، معك {s} من بارتك. إذا عندك طلب جديد أو استفسار عن أي صنف أنا جاهز."]},
   afterVisit:{label:"رسالة بعد الزيارة",why:"شكر خلال ساعات من الزيارة يثبّت الانطباع، ويبقى رقمك عنده",t:[
     "السلام عليكم {n}، معك {s} من بارتك. سعدت بزيارتك اليوم وشكراً على وقتك. {recap}هذا رقمي للتواصل المباشر، أرسل لي أي قطعة تحتاجها وأسعّرها لك فوراً.",
     "هلا {n}، {s} من بارتك. شكراً على استقبالك. {recap}متى ما احتجت أي قطعة أرسل اسمها وموديل السيارة وأرد عليك بأسرع وقت.",
@@ -2111,6 +2151,7 @@ function waSituation(c){
   const lv=S.lastVisit.get(c.id);
   if(stg.startsWith("new")&&lv){ const n=diff(lv,day); if(n>=3&&n<=10) return {kind:"newbie",u:60}; }
   if(stg==="lapsed"&&(!lv||diff(lv,day)>=21)) return {kind:"cold",u:40};
+  if(stg==="current"&&msgOnly(c,day)&&visitDue(c,day)) return {kind:"checkin",u:55}; /* periodic follow-up by message instead of a visit */
   return null;
 }
 function waSuggestions(day,max){
@@ -2128,7 +2169,7 @@ function waHTML(day){
    +'<button class="btn" data-act="tab" data-tab="msgs" style="margin-top:10px;width:100%">كل الرسائل'+(all.length>2?' ('+all.length+')':'')+'</button></section>';
 }
 /* messages tab: suggestions, message anyone, recently sent */
-const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد التسليم",quote:"متابعة تسعير",newbie:"عميل جديد",cold:"عميل بعيد",hello:"رسالة عامة",afterVisit:"بعد الزيارة",thanksOrder:"شكر على الطلبية",interestFollow:"متابعة اهتمام"};
+const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد التسليم",quote:"متابعة تسعير",newbie:"عميل جديد",cold:"عميل بعيد",hello:"رسالة عامة",checkin:"متابعة دورية",afterVisit:"بعد الزيارة",thanksOrder:"شكر على الطلبية",interestFollow:"متابعة اهتمام"};
 function msgsShellHTML(){
   return '<section class="card msgsec" id="msg-sug"></section>'
    +'<section class="card msgsec"><h3>رسالة لأي عميل</h3><div class="field"><input id="msg-q" class="input" type="search" placeholder="ابحث بالاسم أو المنشأة أو الجوال" autocomplete="off"></div><div class="prio" id="msg-res"></div></section>'
@@ -2165,6 +2206,8 @@ function openWa(cid,kind){
       go.addEventListener("click",()=>{
         if(logged) return; logged=true;
         guard(sb.from("messages").insert({id:uuid(),customer_id:cid,kind:s.kind,body:t.value,date:todayStr(),created_by:S.email}).select().single()).then(r=>{ if(r&&r!==true){ putMsg(r); refresh(); } });
+        /* the message counts as the follow-up: a planned visit that was not necessary leaves today's plan */
+        const pv=visitFor(cid,todayStr()); if(pv&&pv.state==="planned"&&msgOnly(c,todayStr())) removeVisit(pv.id);
         toast("سُجّلت الرسالة. أكمل الإرسال من واتساب");
       });
     }
