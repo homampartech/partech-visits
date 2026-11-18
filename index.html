@@ -652,8 +652,12 @@ function msgOnly(c,day){
   const fm=fmOf(c); if(!fm||fm.tier==="A"||fm.fading) return false;
   return facSince(c,day)<cadenceDays(c)*1.6;
 }
-/* a planned visit that the message already covered disappears from the day */
-function hiddenByMsg(v,day){ if(v.state!=="planned"||day!==todayStr()) return false; const c=S.customers.get(v.customerId); return !!c&&msgOnly(c,day)&&messagedToday(c); }
+/* the customer himself wrote today and a price request was raised for him at the operations app: that is a contact made today */
+function inboundToday(c){ const fm=fmOf(c), ppl=fm?fm.people:[c], d=todayStr(); return S.quotes.some(q=>q.date===d&&ppl.some(p=>p.id===q.customerId)); }
+/* a current account that is not cooling and was contacted by himself today needs no visit today */
+function coveredByInbound(c){ const fm=fmOf(c); return !!c&&stOf(c.id)==="current"&&!!fm&&!fm.fading&&inboundToday(c); }
+/* a planned visit that a message or his own request already covered disappears from the day */
+function hiddenByMsg(v,day){ if(v.state!=="planned"||day!==todayStr()) return false; const c=S.customers.get(v.customerId); return !!c&&((msgOnly(c,day)&&messagedToday(c))||coveredByInbound(c)); }
 /* priority score and a one-line reason for each customer */
 function scoreCustomer(c, day, ctx){
   const s=stOf(c.id), d=S.der.get(c.id)||{count:0,lastOrder:null};
@@ -697,7 +701,7 @@ function candidates(day){
     if(visitFor(c.id,day)) continue;
     if(c.facilityId && planned.has(facKey(c))) continue; /* one visit per facility per day */
     const sc=scoreCustomer(c,day,ctx);
-    if(!sc.carryVisit&&!sc.followVisit&&msgOnly(c,day)) continue; /* these are followed up by WhatsApp, not visited */
+    if(!sc.carryVisit&&!sc.followVisit&&(msgOnly(c,day)||coveredByInbound(c))) continue; /* followed up by WhatsApp, or he already wrote to us today */
     out.push(Object.assign({id:c.id,c,fk:facKey(c),area:c.area||""},sc));
   }
   return out;
@@ -1018,6 +1022,7 @@ function dailyPriorities(day){
   const ctx=planCtx(day), best=new Map();
   for(const c of S.customers.values()){
     const dv=visitFor(c.id,day); if(dv&&dv.state==="done") continue;
+    if(coveredByInbound(c)) continue;
     const fm=fmOf(c), r=scoreCustomer(c,day,ctx), d=S.der.get(c.id)||{};
     let u=0, why="";
     if(r.kind==="carry"){ u=100; why="زيارة مخططة سابقاً لم تُنفَّذ"; }
@@ -2154,6 +2159,7 @@ function lastMsg(cid){ return S.messages.filter(m=>m.customerId===cid).map(m=>m.
 /* when is a message better than a visit? Tier A and cooling B accounts always get the visit. */
 function waSituation(c){
   const day=todayStr(); if(dow(day)===5||!phoneOk(normPhone(c.phone))) return null;
+  if(inboundToday(c)) return null; /* he is already in conversation with us today */
   const lm=lastMsg(c.id), stg=stageOf(c.id), lv0=lastDoneVisit(c.id), isNew=stg.startsWith("new");
   /* within a day of a visit that went well (or any visit to a new account): thank him, once */
   if(lv0&&diff(lv0.date,day)<=1&&lv0.result!=="absent"&&lv0.result!=="notnow"&&(lv0.result==="order"||lv0.result==="interested"||isNew)&&(!lm||lm<lv0.date))
