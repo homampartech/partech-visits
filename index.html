@@ -650,7 +650,7 @@ function visitDue(c,day){ return facSince(c,day)>=cadenceDays(c)*0.6; }
 function mustReason(c,day){
   if(!c) return "";
   const fm=fmOf(c), s=stOf(c.id), fs=facSince(c,day), ivl=cadenceDays(c);
-  if(s==="new") return S.lastVisit.get(c.id)?"عميل جديد في مساره: الزيارة جزء من خطته":"عميل جديد لم تتم زيارته الأولى";
+  if(s==="new"){ if(S.lastVisit.get(c.id)) return "عميل جديد في مساره: الزيارة جزء من خطته"; const n=c.since?diff(c.since,day):0; return n>=3?"تأخرت زيارته الأولى "+plural(n,P_DAY):"عميل جديد: زيارته الأولى خلال 3 أيام من تسجيله"; }
   if(fm&&fm.tier==="A") return "فئة A: تُزار حضورياً";
   if(fm&&fm.fading) return "اهتمامه يبرد: يحتاج زيارة";
   if(s==="lapsed"&&lapsedFlow(c,day)==="visit") return "تواصلنا معه ولم يطلب بعد: حان وقت زيارته";
@@ -2008,7 +2008,7 @@ function newPlaybook(){
 function firstVisitDue(){
   const day=todayStr(), out=[], seen=new Set();
   for(const c of S.customers.values()){
-    if(stOf(c.id)!=="new"||S.lastVisit.get(c.id)||!c.since||diff(c.since,day)>14||diff(c.since,day)<0) continue;
+    if(stOf(c.id)!=="new"||S.lastVisit.get(c.id)||!c.since||diff(c.since,day)>7||diff(c.since,day)<0) continue;
     const k=facKey(c); if(seen.has(k)) continue; seen.add(k); out.push(c.id);
   }
   return out;
@@ -2122,6 +2122,8 @@ function recsHTML(){
       if(hr>=15&&!doneT) M.push("لم تُسجَّل أي زيارة اليوم حتى الآن. اسأله قبل أن تحكم: قد يكون نسي التسجيل."); }
     let convM=0; for(const c of S.customers.values()){ const d=S.der.get(c.id); if(d&&d.convertedOn&&monthKey(d.convertedOn)===monthKey(day)) convM++; }
     if(Number(day.slice(8))>=15&&convM<cfg.monthlyConv/2) M.push("تحويل العملاء الجدد ضعيف هذا الشهر ("+convM+" من "+cfg.monthlyConv+"). فكّر برفع الزيارات الأولى للجدد إلى 3 أسبوعياً.");
+    const lateFirst=firstVisitDue().map(id=>S.customers.get(id)).filter(c=>c&&diff(c.since,day)>=3);
+    if(lateFirst.length) M.unshift(lateFirst.length===1?"عميل جديد لم تتم زيارته الأولى منذ 3 أيام أو أكثر: "+cname(lateFirst[0])+".":lateFirst.length+" عملاء جدد لم تتم زيارتهم الأولى منذ 3 أيام أو أكثر.");
     const stuck=newPlaybook().filter(o=>o.idle>=5);
     if(stuck.length) M.unshift(stuck.length===1?"عميل جديد بلا أي لمسة منذ 5 أيام أو أكثر: "+stuck[0].name+".":stuck.length+" عملاء جدد بلا أي لمسة منذ 5 أيام أو أكثر، أولهم "+stuck[0].name+".");
   }
