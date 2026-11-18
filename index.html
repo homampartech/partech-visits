@@ -2206,6 +2206,8 @@ function waSituation(c){
     if(isNew) return {kind:lv0.result==="absent"?"missedNew":lv0.result==="notnow"?"softNew":lv0.result==="order"?"thanksOrder":"welcomeNew",u:96}; /* a new account is always written to within a day, whatever the result */
     if(lv0.result==="order"||lv0.result==="interested") return {kind:lv0.result==="order"?"thanksOrder":"afterVisit",u:96};
   }
+  /* a brand-new account just registered (met in the field): the welcome message goes out right away, before any visit is logged */
+  if(isNew&&!lv0&&!lm&&c.since&&diff(c.since,day)<=1) return {kind:"welcomeNew",u:97};
   if(lm&&diff(lm,day)<(isNew?3:7)) return null; /* new accounts can take a follow-up every 3 days, others every 7 */
   const fm=fmOf(c), d=S.der.get(c.id)||{};
   const oq=S.quotes.filter(q=>q.customerId===c.id&&liveQuote(q,day)&&diff(q.date,day)>=1).sort((a,b)=>a.date<b.date?1:-1)[0]; /* the newest live quote */
