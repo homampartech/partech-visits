@@ -2268,7 +2268,7 @@ function lastMsg(cid){ return S.messages.filter(m=>m.customerId===cid&&m.kind!==
    +1h message, +5h call, next day 07:00 message, day 3 07:00 message, day 7 07:00 call, day 14 07:00 final message.
    Times move into 07:00-21:00 Riyadh and never fall on Friday. Quotes approved before QT_ROLLOUT are "legacy": only the day-7 call and the day-14 final message apply.
    The same schedule runs in the quote-push edge function, which sends the push notification. */
-const QT_CH=[["msg","quote"],["call"],["msg","quote"],["msg","quote"],["call"],["msg","quoteLast"]], QT_RY=3*3600e3, QT_ROLLOUT=Date.parse("2026-11-18T18:00:00Z");
+const QT_CH=[["msg","quote"],["call"],["msg","quote"],["msg","quote"],["call"],["msg","quoteLast"]], QT_RY=3*3600e3, QT_ROLLOUT=Date.parse("2026-11-17T21:00:00Z");
 function qtAdj(ms){
   const d=new Date(ms+QT_RY), h=d.getUTCHours();
   if(h<7) d.setUTCHours(7,0,0,0); else if(h>=21){ d.setUTCDate(d.getUTCDate()+1); d.setUTCHours(7,0,0,0); }
