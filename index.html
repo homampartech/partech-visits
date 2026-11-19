@@ -334,7 +334,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-19.4"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-19.5"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -2493,7 +2493,7 @@ const VAPID_PUB="BAWeiy2BW82jlgJV4RO9rjQM-gsji-C6Fo6zHkr0fzjRfFVLru2Fcza5n7lN_rV
 function pushSupported(){ return "serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window; }
 function b64uBytes(s){ const raw=atob((s+"=".repeat((4-s.length%4)%4)).replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from([...raw].map(c=>c.charCodeAt(0))); }
 function pushBannerHTML(){
-  if(S.isOwner||!pushSupported()||S.pushOn||Notification.permission==="denied") return "";
+  if(!pushSupported()||S.pushOn||Notification.permission==="denied") return "";
   return '<section class="notice warnrow"><div><b>فعّل التنبيهات</b><br>لتصلك تذكيرات التسعيرات في وقتها.</div><button class="btn sm primary" data-act="push-on">تفعيل</button></section>';
 }
 async function pushSave(sub){ const j=sub.toJSON(); return guard(sb.from("push_subs").upsert({endpoint:j.endpoint,email:S.email,p256dh:j.keys.p256dh,auth:j.keys.auth}).select().single()); }

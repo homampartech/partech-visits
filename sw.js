@@ -1,5 +1,5 @@
 /* Offline shell for the PARTECH visits app. Data requests to Supabase always go to the network. */
-const CACHE = "ptv-v8";
+const CACHE = "ptv-v9";
 
 // push notifications (quote follow-up reminders)
 self.addEventListener("push", e => {
@@ -27,11 +27,12 @@ self.addEventListener("install", e => {
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
+      .then(keys => { const old = keys.filter(k => k !== CACHE); return Promise.all(old.map(k => caches.delete(k))).then(() => old.length); })
+      .then(n => self.clients.claim().then(() => n))
+      // an older version was replaced: reload open pages once so nobody stays on an old copy (skipped on a first install)
+      .then(n => n ? self.clients.matchAll({ type: "window" }).then(list => list.forEach(c => { try { c.navigate(c.url); } catch (_) {} })) : null)
   );
 });
-
 self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
