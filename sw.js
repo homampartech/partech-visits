@@ -1,5 +1,5 @@
 /* Offline shell for the PARTECH visits app. Data requests to Supabase always go to the network. */
-const CACHE = "ptv-v6";
+const CACHE = "ptv-v7";
 
 // push notifications (quote follow-up reminders)
 self.addEventListener("push", e => {
@@ -37,6 +37,7 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.hostname.endsWith("supabase.co") || url.hostname.endsWith("supabase.in")) return;
+  if (url.searchParams.has("u")) return; // update checks always go to the network and are never cached
 
   // the page itself: newest version when online, cached copy when offline
   if (req.mode === "navigate") {

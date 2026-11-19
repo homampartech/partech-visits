@@ -322,6 +322,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
+const APP_VERSION="2026-11-19.2"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -982,7 +983,7 @@ function renderView(){
   setTimeout(autoPlanToday,0);
   document.querySelectorAll(".tabs button").forEach(b=>{ if(b.dataset.tab===S.tab) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
   const v=$("#view");
-  if(S.tab==="guide"){ if(S.mounted!=="guide"){ v.innerHTML=guideHTML(); S.mounted="guide"; } const rc=$("#recs"); if(rc) rc.innerHTML=recsHTML(); return; }
+  if(S.tab==="guide"){ if(S.mounted!=="guide"){ v.innerHTML=notifCardHTML()+guideHTML(); S.mounted="guide"; } const rc=$("#recs"); if(rc) rc.innerHTML=recsHTML(); return; }
   if(S.tab==="today"){ v.innerHTML = installHTML()+todayHTML(); S.mounted="today"; }
   else if(S.tab==="dash"){ v.innerHTML = dashHTML(); S.mounted="dash"; }
   else if(S.tab==="customers"){
@@ -2017,11 +2018,12 @@ function achLine(day){
    +'<span class="chip '+(a.weekHit?"order":"muted")+'">الأسبوع '+a.st.week.w+'/'+a.weekT+(a.weekHit?' ✓':'')+'</span>'
    +'<span class="chip '+(a.monthHit?"order":"muted")+'">الشهر '+a.st.month.w+'/'+a.monthT+(a.monthHit?' ✓':'')+'</span></div>';
 }
+const dealsW=n=>n>=3&&n<=10?"صفقات":"صفقة";
 function achCard(day){
   const a=achievements(day), cfg=S.cfg, mk=monthKey(day), cm=S.commission.get(mk), left=Math.max(0,cfg.monthWins-a.st.month.w), fm=n=>Math.round(Number(n)||0).toLocaleString("en-US");
   const money=(!cm||a.st.month.w<cfg.monthWins)
-    ?'بقي <b>'+left+'</b> صفقة ليبدأ احتساب عمولتك: <b>'+cfg.bonusPct+'%</b> من صافي ربح كل صفقة فوق '+cfg.monthWins+' صفقة في الشهر (الربح بعد التوصيل).'
-    :'فوق هدف الشهر: <b>'+cm.extra_n+'</b> صفقة. عمولتك المؤكَّدة <b>'+fm(cm.confirmed)+'</b> ر.س'+(Number(cm.pending)>0?' + <b>'+fm(cm.pending)+'</b> ر.س معلّقة حتى يسدّد العملاء':'')+'.';
+    ?'بقي <b>'+left+'</b> '+dealsW(left)+' ليبدأ احتساب عمولتك: <b>'+cfg.bonusPct+'%</b> من صافي ربح كل صفقة فوق '+cfg.monthWins+' صفقة في الشهر (الربح بعد التوصيل).'
+    :'فوق هدف الشهر: <b>'+cm.extra_n+'</b> '+dealsW(cm.extra_n)+'. عمولتك المؤكَّدة <b>'+fm(cm.confirmed)+'</b> ر.س'+(Number(cm.pending)>0?' + <b>'+fm(cm.pending)+'</b> ر.س معلّقة حتى يسدّد العملاء':'')+'.';
   return '<section class="card"><h3>إنجازاتك <small>الصفقات المؤكَّدة</small></h3>'
    +kpi("اليوم",a.st.day.w,cfg.dailyWins)+kpi("هذا الأسبوع",a.st.week.w,cfg.weekWins)+kpi("هذا الشهر",a.st.month.w,cfg.monthWins)
    +'<div class="credit '+((cm&&a.st.month.w>=cfg.monthWins)?"on":"")+'">'+money+'</div>'
@@ -2304,11 +2306,11 @@ function quoteNextText(q,day){
   if(q.stage!=="بانتظار التأكيد") return "بانتظار الاعتماد الداخلي";
   const {T,legacy}=quoteSteps(q), now=Date.now(), n=quoteDone(q).length, w=i=>QT_CH[i][0]==="call"?"اتصال":"رسالة";
   let cur=-1; T.forEach((t,i)=>{ if(t<=now) cur=i; });
-  if(n<=cur&&!(legacy&&cur<4)) return "متابعة مستحقة: "+w(cur);
+  if(n<=cur&&!(legacy&&cur<4)){ const cc=S.customers.get(q.customerId); return (!cc||!phoneOk(normPhone(cc.phone)))?"متابعة مستحقة · أضف رقم جوال صحيحاً للعميل":(dow(todayStr())===5?"تُستحق يوم السبت: ":"متابعة مستحقة: ")+w(cur); }
   let nx=Math.max(n,cur+1); if(legacy) nx=Math.max(nx,4);
   if(nx>5) return "اكتملت المتابعات · يُغلق تلقائياً بعد 21 يوماً";
   const hrs=Math.max(0,Math.round((T[nx]-now)/3600e3));
-  return "التالية: "+w(nx)+" "+(hrs<24?"بعد "+hrs+" ساعة":"بعد "+plural(Math.round(hrs/24),P_DAY));
+  return "التالية: "+w(nx)+" "+(hrs<24?"بعد "+(hrs===2?"ساعتين":hrs+" "+(hrs>=3&&hrs<=10?"ساعات":"ساعة")):"بعد "+plural(Math.round(hrs/24),P_DAY));
 }function waSituation(c){
   const day=todayStr(); if(dow(day)===5||!phoneOk(normPhone(c.phone))) return null;
   if(inboundToday(c)) return null; /* he is already in conversation with us today */
@@ -2447,6 +2449,9 @@ document.addEventListener("click",async e=>{
   if(a==="open-suggest") return openSuggest();
   if(a==="quote-drop") return openQuoteDrop(id);
   if(a==="push-on") return pushEnable();
+  if(a==="push-test") return pushTest();
+  if(a==="do-update") return doUpdate();
+  if(a==="check-update") return checkUpdate(true);
   if(a==="dash-more"){ S.dashOpen=!S.dashOpen; return; }
   if(a==="goto-quotes"){ const el=$("#quotes-sec"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
   if(a==="call-log"){ /* the call link opens normally; the touch is logged so the row clears */
@@ -2496,13 +2501,49 @@ async function pushEnable(){
     if(await Notification.requestPermission()!=="granted"){ toast("لم تُفعَّل التنبيهات"); return; }
     const reg=await navigator.serviceWorker.ready; let sub=await reg.pushManager.getSubscription();
     if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uBytes(VAPID_PUB)});
-    const r=await pushSave(sub); if(r){ S.pushOn=true; toast("فُعّلت التنبيهات"); refresh(); }
+    const r=await pushSave(sub); if(r){ S.pushOn=true; S.mounted=null; toast("فُعّلت التنبيهات"); refresh(); }
   }catch(e){ toast("تعذّر تفعيل التنبيهات على هذا الجهاز"); }
 }
 function pushCheck(){ /* already subscribed on this device? keep the server copy fresh */
   if(S.pushChecked||!pushSupported()||Notification.permission!=="granted") return; S.pushChecked=true;
-  navigator.serviceWorker.ready.then(r=>r.pushManager.getSubscription()).then(sub=>{ if(sub&&S.email){ S.pushOn=true; pushSave(sub); } }).catch(()=>{});
+  navigator.serviceWorker.ready.then(r=>r.pushManager.getSubscription()).then(sub=>{ if(sub&&S.email){ const was=S.pushOn; S.pushOn=true; pushSave(sub); if(!was&&S.tab==="guide"){ S.mounted=null; refresh(); } } }).catch(()=>{});
 }
+function notifCardHTML(){
+  let st, btn=""; setTimeout(pushCheck,0);
+  if(!pushSupported()) st="هذا الجهاز أو المتصفح لا يدعم التنبيهات. على الآيفون أضِف التطبيق إلى الشاشة الرئيسية أولاً.";
+  else if(Notification.permission==="denied") st="التنبيهات محظورة لهذا الموقع. افتح إعدادات المتصفح للموقع واسمح بالإشعارات ثم أعد فتح التطبيق.";
+  else if(S.pushOn) { st="التنبيهات مفعّلة على هذا الجهاز."; btn='<button class="btn sm" data-act="push-test">جرّب تنبيهاً الآن</button>'; }
+  else { st="لم تُفعَّل التنبيهات على هذا الجهاز بعد."; btn='<button class="btn sm primary" data-act="push-on">تفعيل</button>'; }
+  return '<div class="guide list"><div class="card"><h3>التنبيهات</h3><div class="v-sub">'+st+'</div>'+(btn?'<div class="row" style="margin-top:8px">'+btn+'</div>':"")
+    +'<div class="v-sub" style="margin-top:8px">الإصدار '+esc(APP_VERSION)+' <button class="btn sm ghost" data-act="check-update">تحقق من التحديث</button></div></div></div>';
+}
+async function pushTest(){
+  try{
+    const reg=await navigator.serviceWorker.ready, sub=await reg.pushManager.getSubscription(); if(!sub){ toast("لا يوجد اشتراك على هذا الجهاز. فعّل التنبيهات أولاً"); return; }
+    const r=await fetch(SUPABASE_URL+"/functions/v1/quote-push?test=1",{method:"POST",headers:{"Content-Type":"application/json",apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY},body:JSON.stringify({endpoint:sub.endpoint})});
+    const j=await r.json().catch(()=>({})); toast(j.ok?"أُرسل تنبيه تجريبي، يصلك خلال ثوانٍ":"تعذّر الإرسال: "+String(j.error||r.status).slice(0,80));
+  }catch(e){ toast("تعذّر الإرسال التجريبي"); }
+}
+/* in-app update: compare the version baked into this page with the live index.html; offer a button when they differ */
+function showUpdate(){
+  if($("#upd")) return; const d=document.createElement("div"); d.id="upd";
+  d.style.cssText="position:fixed;inset-inline:12px;bottom:78px;z-index:60;background:#1c1c1e;color:#fff;border-radius:14px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 6px 24px rgba(0,0,0,.28);font-size:14px";
+  d.innerHTML='<span>يتوفر تحديث جديد للتطبيق</span><button class="btn sm primary" data-act="do-update">حدّث الآن</button>'; document.body.appendChild(d);
+}
+async function checkUpdate(manual){
+  try{
+    const r=await fetch(location.pathname+"?u="+Date.now(),{cache:"no-store"}); if(!r.ok) throw new Error("http");
+    const m=(await r.text()).match(/const APP_VERSION="([^"]+)"/);
+    if(m&&m[1]!==APP_VERSION){ showUpdate(); if(manual) toast("يوجد تحديث جديد"); } else if(manual) toast("لديك آخر إصدار");
+  }catch(e){ if(manual) toast("تعذّر التحقق من التحديث"); }
+}
+async function doUpdate(){
+  try{ if("caches" in window){ for(const k of await caches.keys()) await caches.delete(k); } if(navigator.serviceWorker){ for(const g of await navigator.serviceWorker.getRegistrations()) await g.update(); } }catch(e){}
+  location.reload();
+}
+window.addEventListener("load",()=>{ setTimeout(checkUpdate,4000); });
+setInterval(checkUpdate,600000);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") checkUpdate(); });
 if("serviceWorker" in navigator) window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
 boot();
 })();
