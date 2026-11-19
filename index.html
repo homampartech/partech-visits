@@ -170,6 +170,8 @@ textarea.input{min-height:110px;resize:vertical;line-height:1.5}
 .qamt{font-weight:700;color:var(--ink);white-space:nowrap}
 .qnext{font-size:15px;color:var(--ink-2)}
 .qnext.isdue{color:var(--warn);font-weight:700}
+.intro-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.intro-btns .btn{width:100%;justify-content:center;text-align:center}
 .qact{display:flex;gap:10px}
 .qact .btn{flex:1;justify-content:center}
 .qact:empty{display:none}.cust{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 16px;display:flex;align-items:center;gap:14px;cursor:pointer;text-align:start;border:0;width:100%;transition:transform .12s}
@@ -334,7 +336,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-19.13"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-19.14"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -1859,13 +1861,29 @@ function openCustomerForm(id, opt){
         let r;
         if(id){ if(base!==c0.base){ data.base=base; data.since=todayStr(); } r=await guard(sb.from("customers").update(data).eq("id",id).select().single(),"حُفظت التعديلات"); }
         else r=await guard(sb.from("customers").insert(Object.assign(data,{id:uuid(),base,since:todayStr(),created_by:S.email})).select().single(),"أُضيف العميل");
-        if(r){ putCust(r); refresh(); if(id) openCustomer(id); else closeSheet(); } else $("#cf-save").disabled=false;
+        if(r){ putCust(r); refresh(); if(id) openCustomer(id); else { closeSheet(); if(base==="new") setTimeout(()=>openIntroAsk(r.id),300); } } else $("#cf-save").disabled=false;
       });
     }
   });
 }
 
-/* facility form */
+/* right after a NEW customer is added: "did you visit him now?" - one tap records a short intro visit, which starts the new-customer path and the right after-visit message */
+function openIntroAsk(cid){
+  const c=S.customers.get(cid); if(!c) return;
+  const opts=[["interested","مهتم - يحتاج متابعة"],["order","طلب مني"],["notnow","غير مهتم حالياً"],["absent","لم يتواجد"]];
+  openSheet({
+    title:"هل زرته الآن؟", sub:esc(cname(c)+" · "+facOf(c).name),
+    body:'<div class="v-sub">إن زرته الآن فاختر نتيجة الزيارة بنقرة واحدة: تُسجَّل كزيارة تعارف مختصرة ويبدأ مسار العميل الجديد ورسالة ما بعد الزيارة المناسبة.</div><div class="intro-btns">'+opts.map(x=>'<button class="btn" data-intro="'+x[0]+'">'+x[1]+'</button>').join("")+'</div>',
+    foot:'<button class="btn" data-act="close-sheet">لم أزره بعد</button>',
+    mount(root){
+      root.addEventListener("click",async e=>{
+        const b=e.target.closest("[data-intro]"); if(!b) return; const all=root.querySelectorAll("[data-intro]"); all.forEach(x=>x.disabled=true);
+        const id=await createVisit(cid,todayStr(),{state:"done",result:b.dataset.intro,channel:"visit",purpose:"intro",unplanned:true,notes:"",checks:{},goal:"",goal_met:"",reason:"",time:new Date().toTimeString().slice(0,5),done_at:new Date().toISOString(),done_by:S.email});
+        if(id){ toast("سُجّلت زيارة التعارف"); closeSheet(); } else all.forEach(x=>x.disabled=false);
+      });
+    }
+  });
+}/* facility form */
 function openFacility(fid){
   const f=S.facilities.get(fid); if(!f) return;
   const inp=(k,label,val,attrs)=>'<div class="field"><label for="ff-'+k+'">'+label+'</label><input id="ff-'+k+'" class="input" value="'+esc(val==null?"":val)+'" '+(attrs||"")+'></div>';
