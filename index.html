@@ -334,7 +334,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-19.9"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-19.10"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -1942,8 +1942,8 @@ function quotesHTML(day){
     const isDue=!!d||nt.indexOf("مستحقة")===0||nt.indexOf("تُستحق")===0;
     return '<article class="qrow'+(isDue?' isdue':'')+'">'
      +'<div class="qtop"><b class="qname">'+esc(c?cname(c):"—")+'</b>'+(sent?'<span class="chip qsent">أُرسلت للعميل</span>':'<span class="chip muted">قيد الاعتماد</span>')+'</div>'
-     +'<div class="qitem"><bdi>'+esc(shorten(q.carLabel||q.item,60))+'</bdi></div>'
-     +'<div class="qsub"><span><bdi>'+esc(q.carLabel?q.item:"")+'</bdi>'+(q.carLabel?' · ':'')+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span>'+(q.value>0?'<span class="qamt" dir="rtl"><bdi>'+q.value.toLocaleString("en-US")+'</bdi> ر.س</span>':'')+'</div>'
+     +'<div class="qitem"><bdi>'+esc(shorten(q.item,60))+'</bdi></div>'
+     +'<div class="qsub"><span>'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span>'+(q.value>0?'<span class="qamt" dir="rtl"><bdi>'+q.value.toLocaleString("en-US")+'</bdi> ر.س</span>':'')+'</div>'
      +'<div class="qnext'+(isDue?' isdue':'')+'">'+esc(nt)+'</div>'
      +'<div class="qact">'+quoteActBtn(d)+'<button class="btn sm" data-act="quote-drop" data-id="'+esc(q.id)+'">لا يريد</button></div></article>';
   }).join("")+'</div>';
@@ -2381,13 +2381,13 @@ const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد الت�
 function openWa(cid,kind,qid){
   const c=S.customers.get(cid); if(!c) return;
   if(!phoneOk(normPhone(c.phone))){ toast("أضف رقم جوال صحيحاً لهذا العميل أولاً"); return; }
-  const s=kind?{kind,item:(()=>{ const qq=(qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||{}; return qq.carLabel||""; })(),q:(qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||null}:(waSituation(c)||{kind:"hello"});
+  const s=kind?{kind,item:(()=>{ const qq=(qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||{}; return qq.item||""; })(),q:(qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||null}:(waSituation(c)||{kind:"hello"});
   let seed=0, logged=false;
   const text=()=>waText(c,s.kind,s.item,seed), lm=lastMsg(cid);
   const href=t=>waLink(c.phone)+"?text="+encodeURIComponent(t);
   openSheet({
     title:"رسالة لـ"+esc(cname(c)), sub:esc(WA[s.kind].label)+(lm?" · آخر رسالة "+esc(ago(lm)):""),
-    body:(s.q?'<div class="v-note"><span class="k">التسعيرة</span><bdi><b>'+esc(s.q.carLabel||"السيارة غير محددة")+'</b></bdi><br><span class="v-sub"><bdi>'+esc(s.q.item)+'</bdi>'+(s.q.value>0?' · <bdi>'+s.q.value.toLocaleString("en-US")+'</bdi> ر.س':'')+'</span></div>':'')+'<div class="field"><label for="wa-t">نص الرسالة (يمكنك تعديله)</label><textarea id="wa-t" class="input" style="min-height:150px"></textarea></div><div class="v-sub">'+esc(WA[s.kind].why)+'</div>',
+    body:(s.q?'<div class="v-note"><span class="k">التسعيرة</span><bdi><b>'+esc(s.q.item)+'</b></bdi><br><span class="v-sub">'+(s.q.value>0?'<bdi>'+s.q.value.toLocaleString("en-US")+'</bdi> ر.س':'')+'</span></div>':'')+'<div class="field"><label for="wa-t">نص الرسالة (يمكنك تعديله)</label><textarea id="wa-t" class="input" style="min-height:150px"></textarea></div><div class="v-sub">'+esc(WA[s.kind].why)+'</div>',
     foot:'<a class="btn primary" id="wa-go" target="_blank" rel="noopener">افتح واتساب وأرسل</a><button class="btn" id="wa-alt">صياغة أخرى</button><button class="btn" id="wa-copy">نسخ</button>',
     mount(){
       const t=$("#wa-t"), go=$("#wa-go"); const set=()=>{ t.value=text(); go.href=href(t.value); };
