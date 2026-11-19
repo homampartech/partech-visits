@@ -334,7 +334,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-19.8"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-19.9"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -476,7 +476,8 @@ function rowToVisit(r){return {id:r.id, customerId:r.customer_id, date:r.date, t
 function rowToFac(r){return {id:r.id, name:r.name||"", type:r.type||"أخرى", area:r.area||"", location:r.location||"", branches:r.branches==null?1:Number(r.branches), fleet:Number(r.fleet||0), note:r.note||"", marginScore:r.margin_score==null?null:Number(r.margin_score)};}
 function rowToOrder(r){return {id:r.id, visitId:r.visit_id||null, customerId:r.customer_id||null, facilityId:r.facility_id||null, date:r.date, orderNo:r.order_no||"", value:r.value==null?null:Number(r.value), status:r.status||"confirmed", source:r.source||"manual"};}
 /* an open price request older than 21 days is treated as cancelled: it is neither shown nor chased */
-function liveQuote(q,day){ return q.status==="open"&&diff(q.date,day||todayStr())<=21&&!quoteDropped(q); }
+function quotePriced(q){ return q.stage!=="طلب تسعير"&&q.value>0; } /* a request that has not been priced yet is not shown or chased: the salesman is not part of it until the price exists */
+function liveQuote(q,day){ return q.status==="open"&&quotePriced(q)&&diff(q.date,day||todayStr())<=21&&!quoteDropped(q); }
 /* the salesman recorded that the customer does not want it: the quote leaves his tasks (nothing changes at the operations app) */
 function quoteDropped(q){ return S.messages.some(m=>m.kind==="quoteDrop"&&m.body===q.id); }
 function activeQuotes(){ return S.quotes.filter(q=>!quoteDropped(q)); } /* quotes the salesman has not dropped: used by every counter */
