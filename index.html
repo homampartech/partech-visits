@@ -334,7 +334,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-19.12"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-19.13"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -477,7 +477,8 @@ function rowToFac(r){return {id:r.id, name:r.name||"", type:r.type||"أخرى", 
 function rowToOrder(r){return {id:r.id, visitId:r.visit_id||null, customerId:r.customer_id||null, facilityId:r.facility_id||null, date:r.date, orderNo:r.order_no||"", value:r.value==null?null:Number(r.value), status:r.status||"confirmed", source:r.source||"manual"};}
 /* an open price request older than 21 days is treated as cancelled: it is neither shown nor chased */
 function quotePriced(q){ return q.stage!=="طلب تسعير"&&q.value>0; } /* a request that has not been priced yet is not shown or chased: the salesman is not part of it until the price exists */
-function liveQuote(q,day){ return q.status==="open"&&quotePriced(q)&&diff(q.date,day||todayStr())<=21&&!quoteDropped(q); }
+function quoteBaseDate(q){ const t=q.approvedAt?Date.parse(String(q.approvedAt).trim().replace(" ","T").replace(/([+-]\d{2})$/,"$1:00")):NaN; return isFinite(t)?new Date(t+3*3600e3).toISOString().slice(0,10):q.date; } /* day the quote went out to the customer (internal approval), else its own day */
+function liveQuote(q,day){ return q.status==="open"&&quotePriced(q)&&diff(quoteBaseDate(q),day||todayStr())<=7&&!quoteDropped(q); } /* an order leaves the visits app 7 days after it went out */
 /* the salesman recorded that the customer does not want it: the quote leaves his tasks (nothing changes at the operations app) */
 function quoteDropped(q){ return S.messages.some(m=>m.kind==="quoteDrop"&&m.body===q.id); }
 function activeQuotes(){ return S.quotes.filter(q=>!quoteDropped(q)); } /* quotes the salesman has not dropped: used by every counter */
@@ -1937,7 +1938,7 @@ function quotesHTML(day){
   const open=S.quotes.filter(x=>liveQuote(x)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0); /* newest first, always */
   let h='<section class="card" id="quotes-sec"><h3>طلبات التسعير <small>تلقائية من العمليات · الهدف '+cfg.dailyQuotes+' يومياً وإغلاق '+cfg.dailyWins+'</small></h3>'
    +kpi("طلبات التسعير",st.n,cfg.dailyQuotes)+kpi("إغلاقات ناجحة",st.w,cfg.dailyWins);
-  if(open.length) h+='<h2 class="sec">تسعيرات تنتظر العميل <small>'+open.length+' تسعيرة'+(due.length?' · '+due.length+' مستحقة':'')+'</small></h2><div class="v-sub" style="margin-top:-6px">تُغلق تلقائياً بعد 21 يوماً</div><div class="list">'+open.filter((q,i)=>dueBy.has(q.id)||i<30).map(q=>{
+  if(open.length) h+='<h2 class="sec">تسعيرات تنتظر العميل <small>'+open.length+' تسعيرة'+(due.length?' · '+due.length+' مستحقة':'')+'</small></h2><div class="v-sub" style="margin-top:-6px">تختفي من التطبيق بعد 7 أيام من إرسالها للعميل</div><div class="list">'+open.filter((q,i)=>dueBy.has(q.id)||i<30).map(q=>{
     const c=S.customers.get(q.customerId), age=diff(q.date,todayStr()), sent=q.stage==="بانتظار التأكيد", d=dueBy.get(q.id), nt=quoteNextText(q,todayStr());
     const isDue=!!d||nt.indexOf("مستحقة")===0||nt.indexOf("تُستحق")===0;
     return '<article class="qrow'+(isDue?' isdue':'')+'">'
@@ -2344,7 +2345,7 @@ function quoteBtns(q,c,d){
     return (dow(todayStr())===5?"تُستحق يوم السبت: ":"متابعة مستحقة: ")+w(cur);
   }
   let nx=cur+1; if(legacy) nx=Math.max(nx,4);
-  if(nx>4||expired) return "اكتملت المتابعات (7 أيام) · يُغلق تلقائياً بعد 21 يوماً";
+  if(nx>4||expired) return "اكتملت المتابعات (7 أيام)";
   const hrs=Math.max(0,Math.round((T[nx]-now)/3600e3));
   return "التالية: "+w(nx)+" "+(hrs<24?"بعد "+(hrs===2?"ساعتين":hrs+" "+(hrs>=3&&hrs<=10?"ساعات":"ساعة")):"بعد "+plural(Math.round(hrs/24),P_DAY));
 }function waSituation(c){
@@ -2504,7 +2505,7 @@ const VAPID_PUB="BAWeiy2BW82jlgJV4RO9rjQM-gsji-C6Fo6zHkr0fzjRfFVLru2Fcza5n7lN_rV
 function pushSupported(){ return "serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window; }
 function b64uBytes(s){ const raw=atob((s+"=".repeat((4-s.length%4)%4)).replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from([...raw].map(c=>c.charCodeAt(0))); }
 function pushBannerHTML(){
-  if(!pushSupported()||S.pushOn||Notification.permission==="denied") return "";
+  if(!pushSupported()||S.pushOn||Notification.permission!=="default") return ""; /* once allowed or blocked the banner never comes back */
   return '<section class="notice warnrow"><div><b>فعّل التنبيهات</b><br>لتصلك تذكيرات التسعيرات في وقتها.</div><button class="btn sm primary" data-act="push-on">تفعيل</button></section>';
 }
 async function pushSave(sub){ const j=sub.toJSON(); return guard(sb.from("push_subs").upsert({endpoint:j.endpoint,email:S.email,p256dh:j.keys.p256dh,auth:j.keys.auth}).select().single()); }
@@ -2518,7 +2519,7 @@ async function pushEnable(){
 }
 function pushCheck(){ /* already subscribed on this device? keep the server copy fresh */
   if(S.pushChecked||!pushSupported()||Notification.permission!=="granted") return; S.pushChecked=true;
-  navigator.serviceWorker.ready.then(r=>r.pushManager.getSubscription()).then(sub=>{ if(sub&&S.email){ const was=S.pushOn; S.pushOn=true; pushSave(sub); if(!was&&S.tab==="guide"){ S.mounted=null; refresh(); } } }).catch(()=>{});
+  navigator.serviceWorker.ready.then(async r=>{ let sub=await r.pushManager.getSubscription(); if(!sub){ try{ sub=await r.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uBytes(VAPID_PUB)}); }catch(e){ return null; } } return sub; }).then(sub=>{ if(sub&&S.email){ const was=S.pushOn; S.pushOn=true; pushSave(sub); if(!was&&S.tab==="guide"){ S.mounted=null; refresh(); } } }).catch(()=>{});
 }
 function notifCardHTML(){
   let st, btn=""; setTimeout(pushCheck,0);
