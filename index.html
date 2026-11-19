@@ -160,7 +160,19 @@ textarea.input{min-height:110px;resize:vertical;line-height:1.5}
 .filters{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
 .filters button{appearance:none;border:0;background:var(--fill);border-radius:999px;padding:8px 16px;font-size:15px;font-weight:600;cursor:pointer;white-space:nowrap;color:var(--ink-2)}
 .filters button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
-.cust{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 16px;display:flex;align-items:center;gap:14px;cursor:pointer;text-align:start;border:0;width:100%;transition:transform .12s}
+.qrow{background:var(--surface-2);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px;border-inline-start:5px solid var(--line)}
+.qrow.isdue{border-inline-start-color:var(--warn)}
+.qtop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.qname{font-weight:700;font-size:18px;line-height:1.3;min-width:0}
+.chip.qsent{background:var(--warn-soft);color:var(--warn)}
+.qitem{font-size:16px;color:var(--ink);overflow-wrap:anywhere}
+.qval{color:var(--ink-2);white-space:nowrap}
+.qmeta{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;color:var(--ink-3)}
+.qnext{text-align:end;color:var(--ink-2)}
+.qnext.isdue{color:var(--warn);font-weight:700}
+.qact{display:flex;gap:10px}
+.qact .btn{flex:1;justify-content:center}
+.qact:empty{display:none}.cust{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 16px;display:flex;align-items:center;gap:14px;cursor:pointer;text-align:start;border:0;width:100%;transition:transform .12s}
 .cust:active{transform:scale(.985)}
 .cust .avatar{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:19px;flex:none}
 .avatar.current{background:var(--good-soft);color:var(--good)}
@@ -322,7 +334,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-19.3"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-19.4"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -1918,14 +1930,17 @@ function quotesHTML(day){
   const open=S.quotes.filter(x=>liveQuote(x)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0); /* newest first, always */
   let h='<section class="card" id="quotes-sec"><h3>طلبات التسعير <small>تلقائية من العمليات · الهدف '+cfg.dailyQuotes+' يومياً وإغلاق '+cfg.dailyWins+'</small></h3>'
    +kpi("طلبات التسعير",st.n,cfg.dailyQuotes)+kpi("إغلاقات ناجحة",st.w,cfg.dailyWins);
-  if(open.length) h+='<h2 class="sec">تسعيرات تنتظر العميل <small>'+open.length+(due.length?' · '+due.length+' مستحقة المتابعة':'')+' · تُغلق تلقائياً بعد 21 يوماً</small></h2><div class="list">'+open.filter((q,i)=>dueBy.has(q.id)||i<30).map(q=>{
-    const c=S.customers.get(q.customerId), age=diff(q.date,todayStr()), appr=q.stage==="بانتظار التأكيد";
-    const tag=appr?'<span class="chip warn" style="background:var(--warn-soft);color:var(--warn)">أُرسلت · بانتظار تأكيد العميل</span>':'<span class="chip muted">قيد الاعتماد الداخلي</span>';
-    return '<div class="ord" style="flex-wrap:wrap"><span style="flex:1 1 100%"><b>'+esc(c?cname(c):"—")+'</b> · '+esc(shorten(q.item,40))+(q.value>0?' · '+q.value.toLocaleString("en-US")+' ر.س':'')+' <span class="'+(age>=2?"due":"")+'">'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span> '+tag+'<span class="v-sub" style="display:block;margin-top:2px">'+esc(quoteNextText(q,todayStr()))+'</span><span class="row" style="gap:8px;margin-top:8px">'+quoteActBtn(dueBy.get(q.id))+'<button class="btn sm" data-act="quote-drop" data-id="'+esc(q.id)+'">لا يريد</button></span></span></div>';
+  if(open.length) h+='<h2 class="sec">تسعيرات تنتظر العميل <small>'+open.length+' تسعيرة'+(due.length?' · '+due.length+' مستحقة':'')+'</small></h2><div class="v-sub" style="margin-top:-6px">تُغلق تلقائياً بعد 21 يوماً</div><div class="list">'+open.filter((q,i)=>dueBy.has(q.id)||i<30).map(q=>{
+    const c=S.customers.get(q.customerId), age=diff(q.date,todayStr()), sent=q.stage==="بانتظار التأكيد", d=dueBy.get(q.id), nt=quoteNextText(q,todayStr());
+    const isDue=!!d||nt.indexOf("مستحقة")===0||nt.indexOf("تُستحق")===0;
+    return '<article class="qrow'+(isDue?' isdue':'')+'">'
+     +'<div class="qtop"><b class="qname">'+esc(c?cname(c):"—")+'</b>'+(sent?'<span class="chip qsent">أُرسلت للعميل</span>':'<span class="chip muted">قيد الاعتماد</span>')+'</div>'
+     +'<div class="qitem">'+esc(shorten(q.item,48))+(q.value>0?' <span class="qval">· '+q.value.toLocaleString("en-US")+' ر.س</span>':'')+'</div>'
+     +'<div class="qmeta"><span>'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span><span class="qnext'+(isDue?' isdue':'')+'">'+esc(nt)+'</span></div>'
+     +'<div class="qact">'+quoteActBtn(d)+'<button class="btn sm" data-act="quote-drop" data-id="'+esc(q.id)+'">لا يريد</button></div></article>';
   }).join("")+'</div>';
   return h+'</section>';
-}
-function openQuote(cid){
+}function openQuote(cid){
   let sel=cid||null;
   const chosen=()=>{ const c=S.customers.get(sel); return c?'<div class="v-note"><span class="k">العميل</span>'+esc(cname(c)+" · "+facOf(c).name)+'</div>':''; };
   openSheet({
