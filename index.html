@@ -322,7 +322,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-19.2"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-19.3"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -467,8 +467,9 @@ function rowToOrder(r){return {id:r.id, visitId:r.visit_id||null, customerId:r.c
 function liveQuote(q,day){ return q.status==="open"&&diff(q.date,day||todayStr())<=21&&!quoteDropped(q); }
 /* the salesman recorded that the customer does not want it: the quote leaves his tasks (nothing changes at the operations app) */
 function quoteDropped(q){ return S.messages.some(m=>m.kind==="quoteDrop"&&m.body===q.id); }
+function activeQuotes(){ return S.quotes.filter(q=>!quoteDropped(q)); } /* quotes the salesman has not dropped: used by every counter */
 function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", stage:r.stage||"", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", approvedAt:r.approved_at||"", by:r.created_by};}
-function putMsg(r){ if(!S.messages.some(x=>x.id===r.id)) S.messages.push({id:r.id,customerId:r.customer_id||null,kind:r.kind||"",body:r.body||"",date:r.date,by:r.created_by}); }
+function putMsg(r){ if(!S.messages.some(x=>x.id===r.id)) S.messages.push({id:r.id,customerId:r.customer_id||null,kind:r.kind||"",body:r.body||"",date:r.date,at:r.created_at||"",by:r.created_by}); }
 /* price requests come only from the operations app (created_by "ops-sync"); nothing is entered by hand */
 function putQuote(r){ const q=rowToQuote(r); if(q.by!=="ops-sync") return; const i=S.quotes.findIndex(x=>x.id===q.id); if(i>=0) S.quotes[i]=q; else S.quotes.push(q); }
 function putFac(r){ S.facilities.set(r.id,rowToFac(r)); }
@@ -676,7 +677,7 @@ function lapsedFlow(c,day){
   return d<4?"wait":d<10?"call":"visit";
 }
 /* the customer himself wrote today and a price request was raised for him at the operations app: that is a contact made today */
-function inboundToday(c){ const fm=fmOf(c), ppl=fm?fm.people:[c], d=todayStr(); return S.quotes.some(q=>q.date===d&&ppl.some(p=>p.id===q.customerId)); }
+function inboundToday(c){ const fm=fmOf(c), ppl=fm?fm.people:[c], d=todayStr(); return activeQuotes().some(q=>q.date===d&&ppl.some(p=>p.id===q.customerId)); }
 /* a current account that is not cooling and was contacted by himself today needs no visit today */
 function coveredByInbound(c){ const fm=fmOf(c); return !!c&&stOf(c.id)==="current"&&!!fm&&!fm.fading&&inboundToday(c); }
 /* a planned visit that a message or his own request already covered disappears from the day */
@@ -942,6 +943,7 @@ function subscribe(){
     .on("postgres_changes",{event:"*",schema:"public",table:"customers"},p=>{ if(p.eventType==="DELETE") S.customers.delete(p.old.id); else putCust(p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"facilities"},p=>{ if(p.eventType==="DELETE") S.facilities.delete(p.old.id); else putFac(p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},p=>{ putMsg(p.new); scheduleRefresh(); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"commission"},p=>{ if(p.eventType==="DELETE") S.commission.delete(p.old.month); else S.commission.set(p.new.month,p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"quotes"},p=>{ if(p.eventType==="DELETE") S.quotes=S.quotes.filter(x=>x.id!==p.old.id); else putQuote(p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"orders"},p=>{ if(p.eventType==="DELETE") dropOrder(p.old.id); else putOrder(p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"order_costs"},p=>{ if(p.eventType==="DELETE") S.costs.delete(p.old.order_id); else S.costs.set(p.new.order_id,Number(p.new.margin_pct)); scheduleRefresh(); })
@@ -1099,7 +1101,7 @@ function followItems(day){
 function followHTML(day){
   const L=followItems(day); if(!L.length) return "";
   const row=x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b><span class="pw">'+esc(x.label)+'</span></div>'
-    +(x.ch==="call"?'<a class="btn sm primary" data-act="call-log" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'" href="tel:'+esc(normPhone(x.c.phone))+'">اتصال</a>':'<button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'">رسالة</button>')+(x.qid?'<button class="btn sm" data-act="quote-drop" data-id="'+esc(x.qid)+'">لا يريد</button>':'')+'</div>';
+    +(x.ch==="call"?'<a class="btn sm primary" data-act="call-log" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'" href="tel:'+esc(normPhone(x.c.phone))+'">اتصال</a>':'<button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'">رسالة</button>')+'</div>';
   return '<section class="card"><h3>متابعة بدون زيارة <small>'+L.length+'</small></h3><div class="v-sub">رسالة واحدة تكفي وتُحسب متابعة، ويختفي العميل بعد إرسالها.</div><div class="prio">'+L.map(row).join("")+'</div></section>';
 }
 function incompleteOrders(){ return []; } /* orders now come only from the operations app, nothing is entered by hand */
@@ -1200,7 +1202,7 @@ function dashHTML(){
   let eW=0; for(let d=ws;d<=t;d=addDays(d,1)) if(dow(d)!==5) eW++;
   let eM=0; for(let d=ms;d<=t;d=addDays(d,1)) if(dow(d)!==5) eM++;
   const paceW=Math.min(1,eW/6), paceM=Math.min(1,eM/cfg.workDaysMonth);
-  const openQ=S.quotes.filter(x=>liveQuote(x)), dueN=quoteDue(t).length, oldest=openQ.reduce((m,q)=>Math.max(m,diff(q.date,t)),0);
+  const openQ=S.quotes.filter(x=>liveQuote(x)&&x.stage==="بانتظار التأكيد"), dueN=quoteDue(t).length, oldest=openQ.reduce((m,q)=>Math.max(m,diff(q.date,t)),0);
   const chased=openQ.filter(q=>diff(q.date,t)>=2), chasedPct=chased.length?Math.round(chased.filter(q=>quoteDone(q).length>0).length/chased.length*100):100;
   const rate=st.month.n?Math.round(st.month.w/st.month.n*100):0, tr=Math.round(cfg.dailyWins/cfg.dailyQuotes*100);
   const cur=[...S.customers.values()].filter(c=>stOf(c.id)==="current"), covered=cur.filter(c=>facSince(c,t)<=cadenceDays(c)*1.2).length;
@@ -1904,7 +1906,7 @@ async function mergeFacilities(ids){
 /* ---------- QUOTES: price requests per day and how many close ---------- */
 function qDate(q){ return q.closedAt?ymd(new Date(q.closedAt)):""; }
 function quoteStats(day){
-  const q=S.quotes, ws=weekStart(day), we=addDays(ws,6), mk=monthKey(day), won=x=>x.status==="won", W=(a,b)=>S.orders.filter(o=>o.source==="ops"&&o.status!=="cancelled"&&o.date>=a&&o.date<=b&&o.value>0).length; /* a win = a confirmed (non-returned) order of one of our customers */
+  const q=activeQuotes(), ws=weekStart(day), we=addDays(ws,6), mk=monthKey(day), won=x=>x.status==="won", W=(a,b)=>S.orders.filter(o=>o.source==="ops"&&o.status!=="cancelled"&&o.date>=a&&o.date<=b&&o.value>0).length; /* a win = a confirmed (non-returned) order of one of our customers */
   return {
     day:{n:q.filter(x=>x.date===day).length, w:W(day,day)},
     week:{n:q.filter(x=>x.date>=ws&&x.date<=we).length, w:W(ws,we)},
@@ -1912,11 +1914,11 @@ function quoteStats(day){
   };
 }
 function quotesHTML(day){
-  const st=quoteStats(day).day, cfg=S.cfg, due=quoteDue(day), dueBy=new Map(due.map(x=>[x.q.id,x]));
+  const st=quoteStats(day).day, cfg=S.cfg, due=day===todayStr()?quoteDue(day):[], dueBy=new Map(due.map(x=>[x.q.id,x]));
   const open=S.quotes.filter(x=>liveQuote(x)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0); /* newest first, always */
   let h='<section class="card" id="quotes-sec"><h3>طلبات التسعير <small>تلقائية من العمليات · الهدف '+cfg.dailyQuotes+' يومياً وإغلاق '+cfg.dailyWins+'</small></h3>'
    +kpi("طلبات التسعير",st.n,cfg.dailyQuotes)+kpi("إغلاقات ناجحة",st.w,cfg.dailyWins);
-  if(open.length) h+='<h2 class="sec">تسعيرات تنتظر العميل <small>'+open.length+(due.length?' · '+due.length+' مستحقة المتابعة':'')+' · تُغلق تلقائياً بعد 21 يوماً</small></h2><div class="list">'+open.slice(0,30).map(q=>{
+  if(open.length) h+='<h2 class="sec">تسعيرات تنتظر العميل <small>'+open.length+(due.length?' · '+due.length+' مستحقة المتابعة':'')+' · تُغلق تلقائياً بعد 21 يوماً</small></h2><div class="list">'+open.filter((q,i)=>dueBy.has(q.id)||i<30).map(q=>{
     const c=S.customers.get(q.customerId), age=diff(q.date,todayStr()), appr=q.stage==="بانتظار التأكيد";
     const tag=appr?'<span class="chip warn" style="background:var(--warn-soft);color:var(--warn)">أُرسلت · بانتظار تأكيد العميل</span>':'<span class="chip muted">قيد الاعتماد الداخلي</span>';
     return '<div class="ord" style="flex-wrap:wrap"><span style="flex:1 1 100%"><b>'+esc(c?cname(c):"—")+'</b> · '+esc(shorten(q.item,40))+(q.value>0?' · '+q.value.toLocaleString("en-US")+' ر.س':'')+' <span class="'+(age>=2?"due":"")+'">'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span> '+tag+'<span class="v-sub" style="display:block;margin-top:2px">'+esc(quoteNextText(q,todayStr()))+'</span><span class="row" style="gap:8px;margin-top:8px">'+quoteActBtn(dueBy.get(q.id))+'<button class="btn sm" data-act="quote-drop" data-id="'+esc(q.id)+'">لا يريد</button></span></span></div>';
@@ -2018,15 +2020,17 @@ function achLine(day){
    +'<span class="chip '+(a.weekHit?"order":"muted")+'">الأسبوع '+a.st.week.w+'/'+a.weekT+(a.weekHit?' ✓':'')+'</span>'
    +'<span class="chip '+(a.monthHit?"order":"muted")+'">الشهر '+a.st.month.w+'/'+a.monthT+(a.monthHit?' ✓':'')+'</span></div>';
 }
-const dealsW=n=>n>=3&&n<=10?"صفقات":"صفقة";
+const dealsW=n=>n===2?"صفقتان":n>=3&&n<=10?"صفقات":"صفقة";
 function achCard(day){
-  const a=achievements(day), cfg=S.cfg, mk=monthKey(day), cm=S.commission.get(mk), left=Math.max(0,cfg.monthWins-a.st.month.w), fm=n=>Math.round(Number(n)||0).toLocaleString("en-US");
-  const money=(!cm||a.st.month.w<cfg.monthWins)
-    ?'بقي <b>'+left+'</b> '+dealsW(left)+' ليبدأ احتساب عمولتك: <b>'+cfg.bonusPct+'%</b> من صافي ربح كل صفقة فوق '+cfg.monthWins+' صفقة في الشهر (الربح بعد التوصيل).'
-    :'فوق هدف الشهر: <b>'+cm.extra_n+'</b> '+dealsW(cm.extra_n)+'. عمولتك المؤكَّدة <b>'+fm(cm.confirmed)+'</b> ر.س'+(Number(cm.pending)>0?' + <b>'+fm(cm.pending)+'</b> ر.س معلّقة حتى يسدّد العملاء':'')+'.';
+  const a=achievements(day), cfg=S.cfg, mk=monthKey(day), cm=S.commission.get(mk), reached=a.st.month.w>=cfg.monthWins, left=Math.max(0,cfg.monthWins-a.st.month.w), fm=n=>Math.round(Number(n)||0).toLocaleString("en-US");
+  const who=S.isOwner?"عمولة المندوب":"عمولتك";
+  let money;
+  if(!reached) money='بقي <b>'+left+'</b> '+dealsW(left)+' ليبدأ احتساب '+who+': <b>'+cfg.bonusPct+'%</b> من صافي ربح كل صفقة فوق '+cfg.monthWins+' صفقة في الشهر (الربح بعد التوصيل).';
+  else if(!cm) money='بلغ هدف الشهر. جارٍ احتساب العمولة، وتظهر هنا خلال دقائق.';
+  else money='فوق هدف الشهر: <b>'+cm.extra_n+'</b> '+dealsW(Number(cm.extra_n))+'. '+who+' المؤكَّدة <b>'+fm(cm.confirmed)+'</b> ر.س'+(Number(cm.pending)>0?' + <b>'+fm(cm.pending)+'</b> ر.س معلّقة حتى يسدّد العملاء':'')+'.';
   return '<section class="card"><h3>إنجازاتك <small>الصفقات المؤكَّدة</small></h3>'
    +kpi("اليوم",a.st.day.w,cfg.dailyWins)+kpi("هذا الأسبوع",a.st.week.w,cfg.weekWins)+kpi("هذا الشهر",a.st.month.w,cfg.monthWins)
-   +'<div class="credit '+((cm&&a.st.month.w>=cfg.monthWins)?"on":"")+'">'+money+'</div>'
+   +'<div class="credit '+(reached?"on":"")+'">'+money+'</div>'
    +'<div class="hint v-sub">الهدف اليومي والأسبوعي مؤشر وتيرة فقط. العمولة شهرية وتُصرف آخر الشهر، وتشمل الصفقات المسدّدة كاملة وغير المرتجعة وبهامش لا يقل عن 10%.</div></section>';
 }/* ---------- NEW-CUSTOMER PLAYBOOK: a fixed rhythm of touches counted from the first visit, so no new account is forgotten ---------- */
 /* [day from first visit, channel, what to do]: msg = WhatsApp, visit = field visit (or call), call = call or message */
@@ -2079,7 +2083,7 @@ function oppsList(){
   const day=todayStr(), cfg=S.cfg, out=[], qBy=new Map(), vBy=new Map(), eBy=new Map();
   const add=(m,k,x)=>{ if(!m.has(k)) m.set(k,[]); m.get(k).push(x); };
   const kOf=cid=>{ const c=S.customers.get(cid); return c?facKey(c):null; };
-  S.quotes.forEach(q=>{ const k=kOf(q.customerId); if(k) add(qBy,k,q); });
+  activeQuotes().forEach(q=>{ const k=kOf(q.customerId); if(k) add(qBy,k,q); });
   S.visits.forEach(v=>{ if(v.state!=="done") return; const seen=new Set(); [v.customerId,...(v.people||[]).map(p=>p.id)].forEach(id=>{ const k=kOf(id); if(k&&!seen.has(k)){ seen.add(k); add(vBy,k,v); } }); });
   S.events.forEach(e=>{ const k=kOf(e.cid); if(k) add(eBy,k,e); });
   const byType=new Map();
@@ -2123,7 +2127,7 @@ function trainHTML(){
   /* this month's project: a brand-new account first visited this month that is still new, furthest along the funnel */
   let best=null;
   for(const [cid,fv] of firstV){ const c=S.customers.get(cid); if(!c||(fv.kind||stOf(cid))!=="new"||monthKey(fv.date)!==monthKey(day)||(S.der.get(cid)||{}).status!=="new") continue;
-    const ev=S.events.filter(e=>e.cid===cid).length, qn=S.quotes.filter(q=>q.customerId===cid).length, st=ev?2:qn?1:0, act=(nv.get(cid)||[]).slice().sort().pop();
+    const ev=S.events.filter(e=>e.cid===cid).length, qn=activeQuotes().filter(q=>q.customerId===cid).length, st=ev?2:qn?1:0, act=(nv.get(cid)||[]).slice().sort().pop();
     if(!best||st>best.st||(st===best.st&&act>best.act)) best={c,st,act}; }
   return '<section class="card"><h3>تدريب: من الصفر إلى الطلبية <small>'+visited+' عملاء جدد زُيروا</small></h3>'
    +'<div class="tiles"><div class="tile"><b>'+rate+'%</b><span>وصلوا إلى أول طلبية</span></div>'
@@ -2145,7 +2149,7 @@ function recsHTML(){
     if(st.day.w<cfg.dailyWins&&open.length) D.push("لديك "+open.length+" طلب مفتوح. أغلق "+Math.min(open.length,cfg.dailyWins-st.day.w)+" منها اليوم.");
     const fad=[...S.facM.values()].filter(f=>f.tier==="A"&&f.fading).length;
     if(fad) D.push(fad===1?"عميل من الفئة A يبرد اهتمامه. زره اليوم قبل أي زيارة أخرى.":fad+" عملاء من الفئة A يبرد اهتمامهم. زرهم اليوم قبل أي زيارة أخرى.");
-    const wa=waSuggestions(day,99).length; if(wa) D.push(wa===1?"رسالة واتساب جاهزة في تبويب «الرسائل».":wa+" رسائل واتساب جاهزة في تبويب «الرسائل».");
+    const wa=waSuggestions(day,99).filter(x=>!/^quote/.test(x.s.kind)).length; if(wa) D.push(wa===1?"رسالة واتساب جاهزة في قسم «متابعة بدون زيارة».":wa+" رسائل واتساب جاهزة في قسم «متابعة بدون زيارة».");
     if(st.day.w>=cfg.dailyWins) D.unshift("حققت هدف اليوم ("+st.day.w+" إغلاقات). أي إغلاق إضافي له حافز.");
   }
   let rem=0; for(let d=day;d<=we;d=addDays(d,1)) if(dow(d)!==5) rem++;
@@ -2278,17 +2282,19 @@ function qtAdj(ms){
   return d.getTime()-QT_RY;
 }
 function quoteSteps(q){
-  const A=q.approvedAt?Date.parse(q.approvedAt):Date.parse(q.date+"T04:00:00Z"); /* no approval time known: treat as the quote's own day */
+  const A0=q.approvedAt?Date.parse(String(q.approvedAt).trim().replace(" ","T").replace(/([+-]\d{2})$/,"$1:00")):NaN, A=isFinite(A0)?A0:Date.parse(q.date+"T04:00:00Z"); /* no (valid) approval time: treat as the quote's own day */
   const b=new Date(A+QT_RY); b.setUTCHours(7,0,0,0); const d0=b.getTime()-QT_RY, raw=[A+3600e3,A+5*3600e3,d0+864e5,d0+3*864e5,d0+7*864e5,d0+14*864e5], T=[];
   raw.forEach((t,i)=>T.push(qtAdj(Math.max(t,i?T[i-1]+3600e3:0))));
-  return {T,legacy:!(q.approvedAt&&A>=QT_ROLLOUT)};
+  return {T,legacy:!(isFinite(A0)&&A>=QT_ROLLOUT)};
 }
+const msgAt=m=>m.at?Date.parse(m.at):Date.parse(m.date+"T00:00:00+03:00");
+function quoteCovered(q,t){ return quoteDone(q).some(m=>msgAt(m)>t); } /* a step is covered once a touch was logged after the step came due */
 function quoteDone(q){ return S.messages.filter(m=>m.customerId===q.customerId&&m.date>=q.date&&(m.kind==="qcall"||/^quote/.test(m.kind||""))&&m.kind!=="quoteDrop"); }
 function quoteTouch(c,day){
   const q=S.quotes.filter(x=>x.customerId===c.id&&liveQuote(x,day)&&x.stage==="بانتظار التأكيد").sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(a.approvedAt<b.approvedAt?1:-1))[0]; if(!q) return null; /* the newest live quote that is out with the customer */
   const {T,legacy}=quoteSteps(q), now=Date.now(); let cur=-1; T.forEach((t,i)=>{ if(t<=now) cur=i; });
   if(cur<0||(legacy&&cur<4)) return null;
-  if(quoteDone(q).length>cur) return null; /* this step (or a later one) is already covered */
+  if(quoteCovered(q,T[cur])) return null; /* this step is already covered by a touch logged after it came due */
   return {q,st:[T[cur]].concat(QT_CH[cur]),idx:cur,late:Math.floor((now-T[cur])/864e5)};
 }
 /* quote follow-ups that are due now, oldest quote first (their own list in the quotes card, not in "follow-ups without a visit") */
@@ -2300,14 +2306,18 @@ function quoteDue(day){
 function quoteActBtn(d){
   if(!d) return "";
   return d.st[1]==="call"?'<a class="btn sm primary" data-act="call-log" data-id="'+esc(d.c.id)+'" data-kind="qcall" href="tel:'+esc(normPhone(d.c.phone))+'">اتصال</a>'
-    :'<button class="btn sm primary" data-act="wa" data-id="'+esc(d.c.id)+'" data-kind="'+d.st[2]+'">رسالة</button>';
+    :'<button class="btn sm primary" data-act="wa" data-id="'+esc(d.c.id)+'" data-kind="'+d.st[2]+'" data-qid="'+esc(d.q.id)+'">رسالة</button>';
 }
 function quoteNextText(q,day){
   if(q.stage!=="بانتظار التأكيد") return "بانتظار الاعتماد الداخلي";
-  const {T,legacy}=quoteSteps(q), now=Date.now(), n=quoteDone(q).length, w=i=>QT_CH[i][0]==="call"?"اتصال":"رسالة";
+  const {T,legacy}=quoteSteps(q), now=Date.now(), w=i=>QT_CH[i][0]==="call"?"اتصال":"رسالة";
   let cur=-1; T.forEach((t,i)=>{ if(t<=now) cur=i; });
-  if(n<=cur&&!(legacy&&cur<4)){ const cc=S.customers.get(q.customerId); return (!cc||!phoneOk(normPhone(cc.phone)))?"متابعة مستحقة · أضف رقم جوال صحيحاً للعميل":(dow(todayStr())===5?"تُستحق يوم السبت: ":"متابعة مستحقة: ")+w(cur); }
-  let nx=Math.max(n,cur+1); if(legacy) nx=Math.max(nx,4);
+  if(cur>=0&&!(legacy&&cur<4)&&!quoteCovered(q,T[cur])){
+    const cc=S.customers.get(q.customerId);
+    if(!cc||!phoneOk(normPhone(cc.phone))) return "متابعة مستحقة · أضف رقم جوال صحيحاً للعميل";
+    return (dow(todayStr())===5?"تُستحق يوم السبت: ":"متابعة مستحقة: ")+w(cur);
+  }
+  let nx=cur+1; if(legacy) nx=Math.max(nx,4);
   if(nx>5) return "اكتملت المتابعات · يُغلق تلقائياً بعد 21 يوماً";
   const hrs=Math.max(0,Math.round((T[nx]-now)/3600e3));
   return "التالية: "+w(nx)+" "+(hrs<24?"بعد "+(hrs===2?"ساعتين":hrs+" "+(hrs>=3&&hrs<=10?"ساعات":"ساعة")):"بعد "+plural(Math.round(hrs/24),P_DAY));
@@ -2343,38 +2353,12 @@ function waSuggestions(day,max){
   for(const c of S.customers.values()){ const s=waSituation(c); if(!s) continue; const k=facKey(c), o=best.get(k); if(!o||s.u>o.s.u) best.set(k,{c,s}); }
   return [...best.values()].sort((a,b)=>b.s.u-a.s.u).slice(0,max||4);
 }
-function waRowsHTML(items){
-  return items.map(x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b><span class="pw">'+esc(WA[x.s.kind].label)+'</span></div><button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.s.kind+'">رسالة</button></div>').join("");
-}
-function waHTML(day){
-  if(day!==todayStr()||dow(day)===5) return "";
-  const all=waSuggestions(day,99); if(!all.length) return "";
-  return '<section class="card"><h3>رسائل واتساب مقترحة <small>بنقرة واحدة</small></h3><div class="prio">'+waRowsHTML(all.slice(0,2))+'</div>'
-   +'<button class="btn" data-act="tab" data-tab="msgs" style="margin-top:10px;width:100%">كل الرسائل'+(all.length>2?' ('+all.length+')':'')+'</button></section>';
-}
 /* messages tab: suggestions, message anyone, recently sent */
 const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد التسليم",quote:"متابعة تسعيرة",quoteAppr:"تأكيد تسعيرة معتمدة",quoteLast:"متابعة أخيرة للتسعيرة",qcall:"اتصال بخصوص تسعيرة",newbie:"عميل جديد",cold:"عميل بعيد",hello:"رسالة عامة",checkin:"متابعة دورية",call:"اتصال",welcomeNew:"ترحيب بعميل جديد",missedNew:"مررنا ولم نلتقِ",softNew:"شكر دون إلحاح",afterVisit:"بعد الزيارة",thanksOrder:"شكر على الطلبية",interestFollow:"متابعة اهتمام"};
-function msgsShellHTML(){
-  return '<section class="card msgsec" id="msg-sug"></section>'
-   +'<section class="card msgsec"><h3>رسالة لأي عميل</h3><div class="field"><input id="msg-q" class="input" type="search" placeholder="ابحث بالاسم أو المنشأة أو الجوال" autocomplete="off"></div><div class="prio" id="msg-res"></div></section>'
-   +'<section class="card msgsec" id="msg-sent"></section>';
-}
-function updateMsgs(){
-  const day=todayStr(), fri=dow(day)===5, all=fri?[]:waSuggestions(day,99);
-  const sug=$("#msg-sug"); if(!sug) return;
-  sug.innerHTML='<h3>مقترحة اليوم'+(all.length?' <small>'+all.length+'</small>':'')+'</h3>'
-    +(all.length?'<div class="prio">'+waRowsHTML(all)+'</div>':'<div class="v-sub">'+(fri?"اليوم الجمعة: إجازة، لا رسائل.":"لا توجد رسائل مقترحة الآن. سنقترح حين يحين موعد عميل.")+'</div>');
-  const q=normName($("#msg-q").value||""), res=$("#msg-res"); let rows=[];
-  if(q){ const qd=($("#msg-q").value||"").replace(/\D/g,"");
-    for(const c of S.customers.values()){ if(normName(cname(c)+" "+(c.name||"")+" "+(c.org||"")).includes(q)||(qd.length>=3&&String(c.phone||"").replace(/\D/g,"").includes(qd))) rows.push(c); if(rows.length>=8) break; } }
-  res.innerHTML=q?(rows.length?rows.map(c=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(c))+' '+tierChip(c)+'</b><span class="pw">'+esc(lastMsg(c.id)?"آخر رسالة "+ago(lastMsg(c.id)):"لم تُرسل له رسالة")+'</span></div><button class="btn sm primary" data-act="wa" data-id="'+esc(c.id)+'">رسالة</button></div>').join(""):'<div class="v-sub">لا يوجد عميل بهذا الاسم.</div>'):'<div class="v-sub">اكتب اسم العميل لتجهيز رسالة له.</div>';
-  const cut=addDays(day,-14), sent=S.messages.filter(m=>m.date>=cut&&m.kind!=="quoteDrop").sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,15);
-  $("#msg-sent").innerHTML='<h3>أُرسلت مؤخراً <small>14 يوماً</small></h3>'+(sent.length?'<div class="prio">'+sent.map(m=>{ const c=S.customers.get(m.customerId); return '<div class="pi"><div class="pm"><b>'+esc(c?cname(c):"عميل محذوف")+'</b><span class="pw">'+esc(MSG_KIND[m.kind]||"رسالة")+' · '+esc(ago(m.date))+'</span></div></div>'; }).join("")+'</div>':'<div class="v-sub">لم تُرسل رسائل بعد.</div>');
-}
-function openWa(cid,kind){
+function openWa(cid,kind,qid){
   const c=S.customers.get(cid); if(!c) return;
   if(!phoneOk(normPhone(c.phone))){ toast("أضف رقم جوال صحيحاً لهذا العميل أولاً"); return; }
-  const s=kind?{kind,item:((S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0])||{}).item||""}:(waSituation(c)||{kind:"hello"});
+  const s=kind?{kind,item:((qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||{}).item||""}:(waSituation(c)||{kind:"hello"});
   let seed=0, logged=false;
   const text=()=>waText(c,s.kind,s.item,seed), lm=lastMsg(cid);
   const href=t=>waLink(c.phone)+"?text="+encodeURIComponent(t);
@@ -2466,7 +2450,7 @@ document.addEventListener("click",async e=>{
   if(a==="carry-drop"){ b.disabled=true; const ids=carryItems(S.day).map(x=>x.carryVisit.id); const up=await guard(sb.from("visits").update({state:"missed"}).in("id",ids).select(),"تم تجاهلها وسُجّلت كزيارات لم تتم"); if(up&&up.forEach){ up.forEach(putVisit); refresh(); } return; }
   if(a==="toggle-imp"){ const c=S.customers.get(id); if(!c) return; const r=await guard(sb.from("customers").update({important:!c.important}).eq("id",id).select().single(),c.important?"أُلغي التمييز":"مُيّز كعميل مهم"); if(r){ putCust(r); refresh(); openCustomer(id); } return; }
   if(a==="guide") return openGuide(id);
-  if(a==="wa") return openWa(id,b.dataset.kind||null);
+  if(a==="wa") return openWa(id,b.dataset.kind||null,b.dataset.qid||null);
   if(a==="new-quote") return openQuote(id||null);
   if(a==="quote-win") return openQuoteClose(id,true);
   if(a==="quote-lose") return openQuoteClose(id,false);
@@ -2485,7 +2469,9 @@ document.addEventListener("click",async e=>{
 
 /* keep "today" correct if the app stays open past midnight */
 let lastToday=todayStr();
-setInterval(()=>{ const t=todayStr(); if(t!==lastToday){ if(S.day===lastToday) S.day=t; lastToday=t; refresh(); } },60000);
+let lastDue=-1;
+setInterval(()=>{ const t=todayStr(); if(t!==lastToday){ if(S.day===lastToday) S.day=t; lastToday=t; refresh(); }
+  if(S.loaded){ const dn=quoteDue(t).length; if(lastDue>=0&&dn!==lastDue) refresh(); lastDue=dn; } },60000);
 
 /* ---------- PUSH NOTIFICATIONS: quote follow-up reminders reach the salesman's phone on time (sent by the quote-push edge function) ---------- */
 const VAPID_PUB="BAWeiy2BW82jlgJV4RO9rjQM-gsji-C6Fo6zHkr0fzjRfFVLru2Fcza5n7lN_rVUQKt7xjXuZ4INGa_9TGYcCCk";

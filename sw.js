@@ -1,5 +1,5 @@
 /* Offline shell for the PARTECH visits app. Data requests to Supabase always go to the network. */
-const CACHE = "ptv-v7";
+const CACHE = "ptv-v8";
 
 // push notifications (quote follow-up reminders)
 self.addEventListener("push", e => {
@@ -42,8 +42,8 @@ self.addEventListener("fetch", e => {
   // the page itself: newest version when online, cached copy when offline
   if (req.mode === "navigate") {
     e.respondWith(
-      fetch(req)
-        .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put("./index.html", copy)); return res; })
+      fetch(req, { cache: "no-cache" })
+        .then(res => { if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put("./index.html", copy)); } return res; })
         .catch(() => caches.match("./index.html"))
     );
     return;
