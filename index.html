@@ -166,9 +166,9 @@ textarea.input{min-height:110px;resize:vertical;line-height:1.5}
 .qname{font-weight:700;font-size:18px;line-height:1.3;min-width:0}
 .chip.qsent{background:var(--warn-soft);color:var(--warn)}
 .qitem{font-size:16px;color:var(--ink);overflow-wrap:anywhere}
-.qval{color:var(--ink-2);white-space:nowrap}
-.qmeta{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;color:var(--ink-3)}
-.qnext{text-align:end;color:var(--ink-2)}
+.qsub{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;color:var(--ink-3)}
+.qamt{font-weight:700;color:var(--ink);white-space:nowrap}
+.qnext{font-size:15px;color:var(--ink-2)}
 .qnext.isdue{color:var(--warn);font-weight:700}
 .qact{display:flex;gap:10px}
 .qact .btn{flex:1;justify-content:center}
@@ -334,7 +334,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-19.5"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-19.6"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -480,7 +480,7 @@ function liveQuote(q,day){ return q.status==="open"&&diff(q.date,day||todayStr()
 /* the salesman recorded that the customer does not want it: the quote leaves his tasks (nothing changes at the operations app) */
 function quoteDropped(q){ return S.messages.some(m=>m.kind==="quoteDrop"&&m.body===q.id); }
 function activeQuotes(){ return S.quotes.filter(q=>!quoteDropped(q)); } /* quotes the salesman has not dropped: used by every counter */
-function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", stage:r.stage||"", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", approvedAt:r.approved_at||"", by:r.created_by};}
+function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", stage:r.stage||"", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", approvedAt:r.approved_at||"", carLabel:r.car_label||"", by:r.created_by};}
 function putMsg(r){ if(!S.messages.some(x=>x.id===r.id)) S.messages.push({id:r.id,customerId:r.customer_id||null,kind:r.kind||"",body:r.body||"",date:r.date,at:r.created_at||"",by:r.created_by}); }
 /* price requests come only from the operations app (created_by "ops-sync"); nothing is entered by hand */
 function putQuote(r){ const q=rowToQuote(r); if(q.by!=="ops-sync") return; const i=S.quotes.findIndex(x=>x.id===q.id); if(i>=0) S.quotes[i]=q; else S.quotes.push(q); }
@@ -1935,8 +1935,9 @@ function quotesHTML(day){
     const isDue=!!d||nt.indexOf("مستحقة")===0||nt.indexOf("تُستحق")===0;
     return '<article class="qrow'+(isDue?' isdue':'')+'">'
      +'<div class="qtop"><b class="qname">'+esc(c?cname(c):"—")+'</b>'+(sent?'<span class="chip qsent">أُرسلت للعميل</span>':'<span class="chip muted">قيد الاعتماد</span>')+'</div>'
-     +'<div class="qitem">'+esc(shorten(q.item,48))+(q.value>0?' <span class="qval">· '+q.value.toLocaleString("en-US")+' ر.س</span>':'')+'</div>'
-     +'<div class="qmeta"><span>'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span><span class="qnext'+(isDue?' isdue':'')+'">'+esc(nt)+'</span></div>'
+     +'<div class="qitem"><bdi>'+esc(shorten(q.carLabel||q.item,60))+'</bdi></div>'
+     +'<div class="qsub"><span><bdi>'+esc(q.carLabel?q.item:"")+'</bdi>'+(q.carLabel?' · ':'')+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span>'+(q.value>0?'<span class="qamt" dir="rtl"><bdi>'+q.value.toLocaleString("en-US")+'</bdi> ر.س</span>':'')+'</div>'
+     +'<div class="qnext'+(isDue?' isdue':'')+'">'+esc(nt)+'</div>'
      +'<div class="qact">'+quoteActBtn(d)+'<button class="btn sm" data-act="quote-drop" data-id="'+esc(q.id)+'">لا يريد</button></div></article>';
   }).join("")+'</div>';
   return h+'</section>';
@@ -2373,7 +2374,7 @@ const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد الت�
 function openWa(cid,kind,qid){
   const c=S.customers.get(cid); if(!c) return;
   if(!phoneOk(normPhone(c.phone))){ toast("أضف رقم جوال صحيحاً لهذا العميل أولاً"); return; }
-  const s=kind?{kind,item:((qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||{}).item||""}:(waSituation(c)||{kind:"hello"});
+  const s=kind?{kind,item:(()=>{ const qq=(qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||{}; return qq.carLabel||qq.item||""; })()}:(waSituation(c)||{kind:"hello"});
   let seed=0, logged=false;
   const text=()=>waText(c,s.kind,s.item,seed), lm=lastMsg(cid);
   const href=t=>waLink(c.phone)+"?text="+encodeURIComponent(t);
