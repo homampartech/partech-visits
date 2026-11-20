@@ -1,12 +1,12 @@
 /* Offline shell for the PARTECH visits app. Data requests to Supabase always go to the network. */
-const CACHE = "ptv-v9";
+const CACHE = "ptv-v10";
 
 // push notifications (quote follow-up reminders)
 self.addEventListener("push", e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) {}
   e.waitUntil(self.registration.showNotification(d.title || "تذكير", {
-    body: d.body || "", tag: d.tag || undefined, icon: "./icons/icon-192.png", badge: "./icons/icon-192.png", dir: "rtl", lang: "ar",
+    body: d.body || "", tag: d.tag || undefined, renotify: !!d.tag, icon: "./icons/icon-192.png", badge: "./icons/icon-192.png", dir: "rtl", lang: "ar",
     data: { url: d.url || "./#today" }
   }));
 });
@@ -14,7 +14,7 @@ self.addEventListener("notificationclick", e => {
   e.notification.close();
   const url = (e.notification.data && e.notification.data.url) || "./#today";
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
-    for (const c of list) { if ("focus" in c) return c.focus(); }
+    for (const c of list) { if ("focus" in c) { try { c.postMessage({ type: "goto" }); } catch (_) {} return c.focus(); } }
     return self.clients.openWindow(url);
   }));
 });
@@ -29,8 +29,8 @@ self.addEventListener("activate", e => {
     caches.keys()
       .then(keys => { const old = keys.filter(k => k !== CACHE); return Promise.all(old.map(k => caches.delete(k))).then(() => old.length); })
       .then(n => self.clients.claim().then(() => n))
-      // an older version was replaced: reload open pages once so nobody stays on an old copy (skipped on a first install)
-      .then(n => n ? self.clients.matchAll({ type: "window" }).then(list => list.forEach(c => { try { c.navigate(c.url); } catch (_) {} })) : null)
+      // an older version was replaced: tell open pages so they show the "update available" bar (nobody loses what they are typing)
+      .then(n => n ? self.clients.matchAll({ type: "window" }).then(list => list.forEach(c => { try { c.postMessage({ type: "sw-updated" }); } catch (_) {} })) : null)
   );
 });
 self.addEventListener("fetch", e => {
