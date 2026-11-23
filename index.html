@@ -7,8 +7,8 @@
 <meta name="description" content="تخطيط وتسجيل زيارات مبيعات بارتك اليومية ومتابعتها مقابل أهداف الخطة">
 <meta name="theme-color" content="#007AFF">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Readex+Pro:wght@500;600;700&display=swap">
@@ -337,7 +337,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-23.5"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-23.6"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -457,6 +457,109 @@ const ICON = {
 let toastT;
 function toast(msg){const t=$("#toast");t.innerHTML="<div>"+esc(msg)+"</div>";clearTimeout(toastT);toastT=setTimeout(()=>{t.innerHTML="";},2800);}
 
+/* ---------- offline layer ----------
+   1) every successful load is saved as a snapshot on the device: with no network the app opens from it
+   2) a write that is made offline (or fails on the network) is queued on the device, shown on screen at once, and sent in order when the connection returns
+   Rows are keyed by the same ids the server uses (uuids made on the device), so a replayed write can never duplicate anything. */
+const Q_KEY="ptv-queue", SNAP_KEY="ptv-snap", MUT=["insert","update","upsert","delete"];
+const RAW_KEY={visits:"id",customers:"id",facilities:"id",orders:"id",quotes:"id",messages:"id",order_costs:"order_id",config:"id"};
+const OFF={q:[],raw:{},syncing:false,failed:0,from:null};
+function offNetErr(e){ const m=String((e&&(e.message||e.details))||e||""); return /failed to fetch|networkerror|network request failed|load failed|fetch failed|timed? ?out|offline|internet/i.test(m)||(e&&e.status===0); }
+function offLoadQ(){ try{ OFF.q=JSON.parse(localStorage.getItem(Q_KEY)||"[]")||[]; }catch(e){ OFF.q=[]; } }
+function offSaveQ(){ try{ localStorage.setItem(Q_KEY,JSON.stringify(OFF.q)); }catch(e){} offBar(); }
+function rawSet(t,r){ const k=RAW_KEY[t]; if(!k||!r||typeof r!=="object"||r[k]==null) return; (OFF.raw[t]||(OFF.raw[t]=new Map())).set(r[k],r); }
+function rawFill(t,rows){ OFF.raw[t]=new Map(); (rows||[]).forEach(r=>rawSet(t,r)); }
+/* the row a queued write would produce, built from the last known row of the same record */
+function offSynth(table,calls){
+  const first=calls.find(c=>MUT.includes(c[0])); if(!first) return null; const m=first[0], a0=first[1][0], key=RAW_KEY[table]||"id", base=OFF.raw[table];
+  if(m==="insert"||m==="upsert"){
+    const arr=Array.isArray(a0)?a0:[a0]; const now=new Date().toISOString();
+    return {rows:arr.map(r=>Object.assign({created_at:now},(base&&base.get(r[key]))||{},r))};
+  }
+  const ids=[]; for(const [n,a] of calls){ if(n==="eq"&&a[0]===key) ids.push(a[1]); else if(n==="in"&&a[0]===key) ids.push(...a[1]); }
+  if(m==="delete") return {rows:[],ids};
+  const rows=[]; for(const id of ids){ const b=base&&base.get(id); if(!b) return null; rows.push(Object.assign({},b,a0)); }
+  return ids.length?{rows}:null;
+}
+const OFF_PUT={visits:r=>putVisit(r),customers:r=>putCust(r),facilities:r=>putFac(r),orders:r=>putOrder(r),messages:r=>putMsg(r),quotes:r=>putQuote(r)};
+const OFF_DROP={visits:id=>dropVisit(id),orders:id=>dropOrder(id),customers:id=>S.customers.delete(id),facilities:id=>S.facilities.delete(id)};
+function offEnqueue(table,calls){
+  const s=offSynth(table,calls);
+  if(!s) return {data:null,error:{message:"Failed to fetch (offline: record not available on this device)"},status:0}; /* nothing to build the change from: report it as not saved */
+  OFF.q.push({id:uuid(),table,calls,at:Date.now()}); offSaveQ();
+  s.rows.forEach(r=>rawSet(table,r)); (s.ids||[]).forEach(id=>{ if(calls.some(c=>c[0]==="delete")) rawDel(table,id); }); snapLive();
+  const wantsRow=calls.some(c=>c[0]==="select"), single=calls.some(c=>c[0]==="single"||c[0]==="maybeSingle");
+  return {data:!wantsRow?null:(single?(s.rows[0]||null):s.rows),error:null,status:200};
+}
+async function offExec(t,table,calls){
+  const isMut=calls.some(c=>MUT.includes(c[0]));
+  if(!isMut){ try{ return await t; }catch(e){ return {data:null,error:e,status:0}; } }
+  if(OFF.q.length||navigator.onLine===false) return offEnqueue(table,calls); /* new writes wait behind older queued ones, so order is kept */
+  let r; try{ r=await t; }catch(e){ r={data:null,error:e,status:0}; }
+  if(r&&r.error&&offNetErr(r.error)) return offEnqueue(table,calls);
+  if(r&&!r.error&&r.data) (Array.isArray(r.data)?r.data:[r.data]).forEach(x=>rawSet(table,x));
+  if(r&&!r.error) snapLive();
+  return r;
+}
+function offWrap(builder,table,calls){
+  return new Proxy(builder,{get(t,p){
+    if(p==="then") return (res,rej)=>offExec(t,table,calls).then(res,rej);
+    const v=t[p]; if(typeof v!=="function") return v;
+    return (...a)=>{ const nb=v.apply(t,a); return (nb&&typeof nb==="object"&&typeof nb.then==="function")?offWrap(nb,table,calls.concat([[p,a]])):nb; };
+  }});
+}
+function offInstall(){ OFF.from=sb.from.bind(sb); sb.from=t=>offWrap(OFF.from(t),t,[]); offLoadQ(); }
+/* put the queued (not yet sent) changes back on screen: used after every load, so a refresh never "undoes" them */
+function offReapply(){
+  for(const op of OFF.q){
+    const s=offSynth(op.table,op.calls); if(!s) continue;
+    if(op.calls.some(c=>c[0]==="delete")){ (s.ids||[]).forEach(id=>{ const f=OFF_DROP[op.table]; if(f) f(id); }); continue; }
+    s.rows.forEach(r=>{ rawSet(op.table,r); const f=OFF_PUT[op.table]; if(f) f(r); });
+  }
+}
+async function offSync(){
+  if(OFF.syncing||!OFF.q.length||navigator.onLine===false||!OFF.from) return;
+  OFF.syncing=true;
+  try{
+    while(OFF.q.length){
+      const op=OFF.q[0]; let b=OFF.from(op.table);
+      for(const [m,a] of op.calls) b=b[m](...a);
+      let r; try{ r=await b; }catch(e){ r={data:null,error:e}; }
+      if(r.error&&offNetErr(r.error)) break;
+      if(r.error&&r.error.code!=="23505"){ OFF.failed++; console.error("queued write dropped",op,r.error); } /* 23505 = already saved earlier: the write was a repeat */
+      OFF.q.shift(); offSaveQ();
+    }
+  }finally{ OFF.syncing=false; }
+  if(!OFF.q.length&&S.loaded){ if(await loadAll(false,true)) refresh(); if(OFF.failed){ toast("تعذّر إرسال "+OFF.failed+" تغيير محفوظ على الجهاز (غير مسموح أو مكرر)"); OFF.failed=0; } }
+  offBar();
+}
+function offBar(){
+  let el=document.getElementById("netbar");
+  if(!el){ if(!document.body) return; el=document.createElement("div"); el.id="netbar"; el.setAttribute("role","status"); el.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99;padding:6px 12px;text-align:center;font-size:13px;font-weight:600;background:#fff4e5;color:#8a4b00;box-shadow:0 1px 4px rgba(0,0,0,.15)"; el.hidden=true; document.body.appendChild(el); }
+  const n=OFF.q.length, off=!!S.offline||navigator.onLine===false;
+  if(!n&&!off){ el.hidden=true; return; }
+  el.hidden=false; el.textContent=(off?"بلا اتصال · ":"")+(n?"تغييرات بانتظار الإرسال: "+n:"تعرض آخر نسخة محفوظة على جهازك");
+}
+function saveSnap(raw){ try{ localStorage.setItem(SNAP_KEY,JSON.stringify({email:S.email,at:Date.now(),raw})); }catch(e){} }
+function rawDel(t,id){ if(OFF.raw[t]) OFF.raw[t].delete(id); }
+/* keep the snapshot as fresh as the screen: live changes (other accounts' work, my own writes) are folded into it, so reopening offline shows them */
+let _snapT=null;
+function snapLive(now){
+  if(!S.loaded||!S.email) return;
+  const go=()=>{ _snapT=null; const o=loadSnap(); if(!o) return; const R=o.raw, rows=t=>OFF.raw[t]?Array.from(OFF.raw[t].values()):null;
+    const map={c:"customers",fac:"facilities",ord:"orders",visits:"visits",qts:"quotes",msgs:"messages",cost:"order_costs"};
+    for(const k in map){ const a=rows(map[k]); if(a) R[k]=a; }
+    saveSnap(R); };
+  if(now){ clearTimeout(_snapT); go(); } else if(!_snapT) _snapT=setTimeout(go,3000);
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") snapLive(true); });
+window.addEventListener("pagehide",()=>snapLive(true));
+function loadSnap(){ try{ const o=JSON.parse(localStorage.getItem(SNAP_KEY)||"null"); return o&&o.email===S.email&&o.raw?o:null; }catch(e){ return null; } }
+function offStoredSession(){ try{ const o=JSON.parse(localStorage.getItem("ptv-auth")||"null"); const u=o&&(o.user||(o.currentSession&&o.currentSession.user)); return u&&u.email?{user:u}:null; }catch(e){ return null; } }
+window.addEventListener("online",()=>{ offBar(); offSync(); });
+window.addEventListener("offline",()=>offBar());
+setInterval(()=>{ if(OFF.q.length) offSync(); },20000);
+
 /* run a Supabase request; returns data or null (and explains the failure) */
 async function guard(q, okMsg){
   try{
@@ -493,15 +596,15 @@ function carShort(s){
   if(m){ s=m[1].replace(/^\S+\s+\d{1,3}\s*[.\-]\s*(?=\S)/,""); } else s=s.replace(/(^|\s)(زبون|عميل|واتس|واتساب|موقع|جديد)(?=\s|$)/g," ");
   return s.replace(/[\s.،,:\-]+$/,"").replace(/\s+/g," ").trim();
 }function rowToQuote(r){return {id:r.id, customerId:r.customer_id||null, date:r.date, item:r.item||"", value:r.value==null?null:Number(r.value), status:r.status||"open", stage:r.stage||"", lostReason:r.lost_reason||"", orderId:r.order_id||null, closedAt:r.closed_at||"", approvedAt:r.approved_at||"", carLabel:carShort(r.car_label), orderNo:r.order_no||"", by:r.created_by};}
-function putMsg(r){ if(!S.messages.some(x=>x.id===r.id)) S.messages.push({id:r.id,customerId:r.customer_id||null,kind:r.kind||"",body:r.body||"",date:r.date,at:r.created_at||"",by:r.created_by}); }
+function putMsg(r){ rawSet("messages",r); if(!S.messages.some(x=>x.id===r.id)) S.messages.push({id:r.id,customerId:r.customer_id||null,kind:r.kind||"",body:r.body||"",date:r.date,at:r.created_at||"",by:r.created_by}); }
 /* price requests come only from the operations app (created_by "ops-sync"); nothing is entered by hand */
-function putQuote(r){ const q=rowToQuote(r); if(q.by!=="ops-sync") return; const i=S.quotes.findIndex(x=>x.id===q.id); if(i>=0) S.quotes[i]=q; else S.quotes.push(q); }
-function putFac(r){ S.facilities.set(r.id,rowToFac(r)); }
-function putOrder(r){ const o=rowToOrder(r); const i=S.orders.findIndex(x=>x.id===o.id); if(i>=0) S.orders[i]=o; else S.orders.push(o); }
-function dropOrder(id){ S.orders=S.orders.filter(x=>x.id!==id); S.costs.delete(id); }
-function putVisit(r){ const v=rowToVisit(r); const i=S.visits.findIndex(x=>x.id===v.id); if(i>=0) S.visits[i]=v; else S.visits.push(v); S.visitById.set(v.id,v); }
-function dropVisit(id){ S.visits=S.visits.filter(x=>x.id!==id); S.visitById.delete(id); }
-function putCust(r){ S.customers.set(r.id,rowToCust(r)); }
+function putQuote(r){ rawSet("quotes",r); const q=rowToQuote(r); if(q.by!=="ops-sync") return; const i=S.quotes.findIndex(x=>x.id===q.id); if(i>=0) S.quotes[i]=q; else S.quotes.push(q); }
+function putFac(r){ rawSet("facilities",r); S.facilities.set(r.id,rowToFac(r)); }
+function putOrder(r){ rawSet("orders",r); const o=rowToOrder(r); const i=S.orders.findIndex(x=>x.id===o.id); if(i>=0) S.orders[i]=o; else S.orders.push(o); }
+function dropOrder(id){ rawDel("orders",id); S.orders=S.orders.filter(x=>x.id!==id); S.costs.delete(id); }
+function putVisit(r){ rawSet("visits",r); const v=rowToVisit(r); const i=S.visits.findIndex(x=>x.id===v.id); if(i>=0) S.visits[i]=v; else S.visits.push(v); S.visitById.set(v.id,v); }
+function dropVisit(id){ rawDel("visits",id); S.visits=S.visits.filter(x=>x.id!==id); S.visitById.delete(id); }
+function putCust(r){ rawSet("customers",r); S.customers.set(r.id,rowToCust(r)); }
 
 /* ---------- status engine ---------- */
 /* base: current | lapsed | new (status at import / creation); since: date that status was confirmed.
@@ -570,7 +673,7 @@ function computeFacilities(){
     for(const p of v.people||[]){ const k=keyOf.get(p.id); if(k) ks.add(k); }
     for(const k of ks){ if(!visBy.has(k)) visBy.set(k,[]); visBy.get(k).push(v); }
   }
-  const RW={order:1,interested:.6,notnow:-.8,absent:-.15}, rank={A:3,B:2,C:1};
+  const RW={order:1,interested:.6,notnow:-.8}, rank={A:3,B:2,C:1}; /* "absent" (not found at the shop) says nothing about interest, so it no longer lowers it */
   S.facM=new Map();
   for(const [k,ppl] of people){
     const f=facOf(ppl[0]), evs=evBy.get(k)||[], vis=visBy.get(k)||[];
@@ -584,7 +687,8 @@ function computeFacilities(){
     if(dates.length>=3){ const gs=[]; for(let i=1;i<dates.length;i++) gs.push(diff(dates[i-1],dates[i])); gap=Math.max(7,Math.round(median(gs))); ratio=dso/gap; }
     let num=0, den=0;
     for(const v of vis){ const age=diff(v.date,t); if(age>90) continue; const r=resFor(v,k,keyOf); if(!(r in RW)) continue; const w=Math.pow(.5,age/21); num+=RW[r]*w; den+=w; }
-    let score=den?50+50*num/den:(evs.length?50:null);
+    for(const e of ev90){ const age=diff(e.date,t); if(age<0||age>90) continue; const w=Math.pow(.5,age/21); num+=w; den+=w; } /* a real order (from the operations app) is the strongest sign of interest, and fades the same way */
+    let score=den?50+50*num/(den+0.25):(evs.length?50:null); /* the 0.25 pulls old evidence back toward neutral: one interested visit two months ago must not read as "high" */
     if(score!=null){
       if(ratio!=null){ if(ratio>2.5) score-=35; else if(ratio>1.6) score-=20; else if(ratio>1.2) score-=8; else if(ratio<=1) score+=8; }
       else if(dso!=null && dso>cfg.lapsedDays*0.75) score-=15;
@@ -873,16 +977,19 @@ async function boot(){
     $("#view").innerHTML='<div class="notice"><b>التطبيق غير مربوط بقاعدة البيانات بعد.</b><br>تحقق من الاتصال بالإنترنت، أو أكمل إعداد Supabase.</div>'; return;
   }
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {auth:{persistSession:true, autoRefreshToken:true, storageKey:"ptv-auth"}});
+  offInstall(); /* offline layer: writes that cannot reach the server are queued on the device */
   sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT") showLogin(); });
-  const {data} = await sb.auth.getSession();
-  if(data && data.session) start(data.session); else showLogin();
+  let sess=null; try{ const r=await sb.auth.getSession(); sess=r&&r.data&&r.data.session; }catch(e){}
+  /* no network: the signed-in user is read from the device, so the app opens from its saved snapshot instead of asking to log in again */
+  if(!sess&&navigator.onLine===false) sess=offStoredSession();
+  if(sess) start(sess); else showLogin();
 }
 function showLogin(msg){
   S.loaded=false; S.mounted=null; closeSheet();
   if(channel){ try{ sb.removeChannel(channel); }catch(e){} channel=null; }
   $(".tabs").hidden=true; $("#who").innerHTML=""; setLive(false);
   $("#view").innerHTML='<form class="login" id="login" novalidate>'
-    +'<img class="logo" src="icons/icon-192.png" alt="">'
+    +'<img class="logo" src="icon-192.png" alt="">'
     +'<h1>أهلاً بك في زيارات بارتك</h1><p>سجّل الدخول بالإيميل وكلمة المرور التي أعطاك إياها المدير.</p>'
     +'<div class="field"><label for="lg-email">الإيميل</label><input id="lg-email" class="input" type="email" autocomplete="username" dir="ltr" inputmode="email" required></div>'
     +'<div class="field"><label for="lg-pass">كلمة المرور</label><input id="lg-pass" class="input" type="password" autocomplete="current-password" dir="ltr" required></div>'
@@ -913,7 +1020,7 @@ async function start(session){
   S.isOwner = S.me.role==="manager";
   renderWho(); $(".tabs").hidden=false;
   subscribe();
-  S.loaded=true; refresh();
+  S.loaded=true; refresh(); offBar(); offSync();
 }
 async function fetchAllVisits(){
   const out=[]; let from=0;
@@ -924,7 +1031,25 @@ async function fetchAllVisits(){
   }
   return out;
 }
-async function loadAll(retried){
+/* put loaded rows (from the server, or from the snapshot saved on the device) into the app state.
+   An optional table that failed to load (null) keeps what is already known: an empty list would bring already-messaged customers back onto the follow-up list. */
+function applyData(R){
+  if(R.pay) S.pay = new Map(R.pay.map(r=>[r.order_id,{paid:r.fully_paid,status:r.status_label||"",total:r.paid_total==null?null:Number(r.paid_total),revenue:r.revenue==null?null:Number(r.revenue),suppliedAt:r.supplied_at||null}])); /* paid flag and operations status per order, synced from the operations app (the view exposes nothing else) */
+  if(R.comm) S.commission = new Map(R.comm.map(r=>[r.month,r]));
+  if(R.msgs){ S.messages=[]; R.msgs.forEach(putMsg); }
+  (S._sentLocal||[]).forEach(putMsg); /* messages logged on this device stay counted even if the refetch is stale */
+  if(R.qts) S.quotes = R.qts.map(rowToQuote).filter(q=>q.by==="ops-sync");
+  S.facilities = new Map(R.fac.map(r=>[r.id,rowToFac(r)]));
+  S.orders = R.ord.map(rowToOrder);
+  if(R.cost) S.costs = new Map(R.cost.map(r=>[r.order_id,Number(r.margin_pct)]));
+  S.customers = new Map(R.c.map(r=>[r.id,rowToCust(r)]));
+  S.team = new Map(R.team.map(t=>[String(t.email).toLowerCase(),t]));
+  S.cfg = Object.assign({},DEF,R.cfg||{});
+  S.visits = R.visits.map(rowToVisit); S.visitById = new Map(S.visits.map(v=>[v.id,v]));
+  rawFill("customers",R.c); rawFill("facilities",R.fac); rawFill("orders",R.ord); rawFill("visits",R.visits); rawFill("quotes",R.qts||[]); rawFill("messages",R.msgs||[]); rawFill("order_costs",R.cost||[]);
+  offReapply(); /* writes still waiting to be sent stay visible */
+}
+async function loadAll(retried,silent){
   try{
     const [c,cfg,team,visits,fac,ord,cost,qts,msgs,comm,pay] = await Promise.all([
       sb.from("customers").select("*"),
@@ -939,27 +1064,22 @@ async function loadAll(retried){
       sb.from("commission").select("*"),
       sb.from("order_payment").select("*")
     ]);
-    S.pay = new Map(((pay&&!pay.error?pay.data:[])||[]).map(r=>[r.order_id,{paid:r.fully_paid,status:r.status_label||"",total:r.paid_total==null?null:Number(r.paid_total),revenue:r.revenue==null?null:Number(r.revenue),suppliedAt:r.supplied_at||null}])); /* paid flag and operations status per order, synced from the operations app (the view exposes nothing else) */
-    S.commission = new Map(((comm&&!comm.error?comm.data:[])||[]).map(r=>[r.month,r]));
-    /* a failed fetch must never wipe what is already known: an empty message log would bring every already-messaged customer back onto the follow-up list */
-    const prevMsgs=S.messages||[]; S.messages=[]; if(msgs.error) prevMsgs.forEach(m=>S.messages.push(m)); else (msgs.data||[]).forEach(putMsg);
-    (S._sentLocal||[]).forEach(putMsg); /* messages logged on this device stay counted even if the refetch is stale */
-    if(!qts.error) S.quotes = (qts.data||[]).map(rowToQuote).filter(q=>q.by==="ops-sync");
     if(c.error) throw c.error; if(team.error) throw team.error;
     if(fac.error||ord.error) throw (fac.error||ord.error);
-    S.facilities = new Map(fac.data.map(r=>[r.id,rowToFac(r)]));
-    S.orders = ord.data.map(rowToOrder);
-    S.costs = new Map(((cost.error?[]:cost.data)||[]).map(r=>[r.order_id,Number(r.margin_pct)]));
-    S.customers = new Map(c.data.map(r=>[r.id,rowToCust(r)]));
-    S.team = new Map(team.data.map(t=>[String(t.email).toLowerCase(),t]));
-    S.cfg = Object.assign({},DEF,(cfg.data&&cfg.data.data)||{});
-    S.visits = visits.map(rowToVisit); S.visitById = new Map(S.visits.map(v=>[v.id,v]));
-    lastLoad = Date.now();
+    const R={c:c.data,cfg:(cfg.data&&cfg.data.data)||null,team:team.data,visits,fac:fac.data,ord:ord.data,
+      cost:cost.error?null:cost.data, qts:qts.error?null:qts.data, msgs:msgs.error?null:msgs.data, comm:(comm&&!comm.error)?comm.data:null, pay:(pay&&!pay.error)?pay.data:null};
+    applyData(R); saveSnap(R);
+    S.offline=false; lastLoad = Date.now(); offBar();
     return true;
   }catch(e){
     console.error(e);
     /* an expired/rotating token is not a reason to sign out: refresh and retry once. The library itself fires SIGNED_OUT only if the refresh token is really invalid. */
-    if(!retried && /JWT|session|token/i.test(String(e.message))){ try{ const r=await sb.auth.refreshSession(); if(r&&r.data&&r.data.session) return loadAll(true); }catch(err){} }
+    if(!retried && navigator.onLine!==false && /JWT|session|token/i.test(String(e.message))){ try{ const r=await sb.auth.refreshSession(); if(r&&r.data&&r.data.session) return loadAll(true,silent); }catch(err){} }
+    /* no network (or the server did not answer): open from the last snapshot saved on this device */
+    if(S.loaded){ S.offline=true; offBar(); return false; } /* already running: keep what is on screen, never replace it with an older snapshot */
+    const snap=loadSnap();
+    if(snap){ try{ applyData(snap.raw); S.offline=true; offBar(); return true; }catch(err2){ console.error(err2); } }
+    if(silent) return false;
     $("#view").innerHTML='<div class="notice"><b>تعذّر تحميل البيانات.</b><br>تحقق من الاتصال بالإنترنت ثم أعد المحاولة.</div><button class="btn primary" data-act="reload">إعادة المحاولة</button>';
     return false;
   }
@@ -968,8 +1088,8 @@ function subscribe(){
   if(channel) return;
   channel = sb.channel("ptv-live")
     .on("postgres_changes",{event:"*",schema:"public",table:"visits"},p=>{ if(p.eventType==="DELETE") dropVisit(p.old.id); else putVisit(p.new); scheduleRefresh(); })
-    .on("postgres_changes",{event:"*",schema:"public",table:"customers"},p=>{ if(p.eventType==="DELETE") S.customers.delete(p.old.id); else putCust(p.new); scheduleRefresh(); })
-    .on("postgres_changes",{event:"*",schema:"public",table:"facilities"},p=>{ if(p.eventType==="DELETE") S.facilities.delete(p.old.id); else putFac(p.new); scheduleRefresh(); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"customers"},p=>{ if(p.eventType==="DELETE"){ S.customers.delete(p.old.id); rawDel("customers",p.old.id); } else putCust(p.new); snapLive(); scheduleRefresh(); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"facilities"},p=>{ if(p.eventType==="DELETE"){ S.facilities.delete(p.old.id); rawDel("facilities",p.old.id); } else putFac(p.new); snapLive(); scheduleRefresh(); })
     .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},p=>{ putMsg(p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"commission"},p=>{ if(p.eventType==="DELETE") S.commission.delete(p.old.month); else S.commission.set(p.new.month,p.new); scheduleRefresh(); })
     .on("postgres_changes",{event:"*",schema:"public",table:"quotes"},p=>{ if(p.eventType==="DELETE") S.quotes=S.quotes.filter(x=>x.id!==p.old.id); else putQuote(p.new); scheduleRefresh(); })
@@ -982,10 +1102,21 @@ function setLive(on){ const l=$("#live"); l.classList.toggle("on",!!on); l.title
 let rT=null;
 function scheduleRefresh(){ if(rT) return; rT=setTimeout(()=>{rT=null;refresh();},120); }
 /* phones drop sockets in the background: reload when the app comes back */
-document.addEventListener("visibilitychange",async()=>{
-  if(document.visibilityState!=="visible"||!S.loaded) return;
-  if(Date.now()-lastLoad>30000){ if(await loadAll()) refresh(); }
-});
+/* coming back to the app (from WhatsApp, another app, or after hours in the background): send pending writes, then re-read everything so another account's work (messages, visits) shows at once */
+async function resync(){
+  if(!S.loaded) return;
+  if(OFF.q.length){ await offSync(); return; }
+  if(Date.now()-lastLoad>8000){ if(await loadAll(false,true)) refresh(); }
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") resync(); });
+window.addEventListener("focus",()=>resync());
+window.addEventListener("online",()=>resync());
+/* while the app stays open: re-read every minute (the live socket is unreliable on phones), unless the user is typing or a sheet is open */
+setInterval(()=>{
+  if(!S.loaded||document.visibilityState!=="visible"||navigator.onLine===false||OFF.q.length||S.sheet) return;
+  const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+  if(Date.now()-lastLoad>60000) resync();
+},30000);
 function refresh(){ if(!S.loaded) return; recompute(); renderView(); if(S.sheet && S.sheet.onUpdate) S.sheet.onUpdate(); }
 
 function renderWho(){

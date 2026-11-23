@@ -1,12 +1,12 @@
 /* Offline shell for the PARTECH visits app. Data requests to Supabase always go to the network. */
-const CACHE = "ptv-v10";
+const CACHE = "ptv-v11";
 
 // push notifications (quote follow-up reminders)
 self.addEventListener("push", e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) {}
   e.waitUntil(self.registration.showNotification(d.title || "تذكير", {
-    body: d.body || "", tag: d.tag || undefined, renotify: !!d.tag, icon: "./icons/icon-192.png", badge: "./icons/icon-192.png", dir: "rtl", lang: "ar",
+    body: d.body || "", tag: d.tag || undefined, renotify: !!d.tag, icon: "./icon-192.png", badge: "./icon-192.png", dir: "rtl", lang: "ar",
     data: { url: d.url || "./#today" }
   }));
 });
@@ -18,10 +18,10 @@ self.addEventListener("notificationclick", e => {
     return self.clients.openWindow(url);
   }));
 });
-const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
+const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => null)))).then(() => self.skipWaiting())); /* one missing file must never stop the offline shell from installing */
 });
 
 self.addEventListener("activate", e => {
