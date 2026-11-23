@@ -361,7 +361,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-23.9"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-23.10"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -1257,11 +1257,13 @@ function todayHTML(){
    +achLine(day)
    +(isOff(day)?'<div class="credit">يوم استثنائي: لا تُحتسب عليه أهداف اليوم.</div>':'')
    +'</section>';
+  /* the order on the page: money owed, price requests, messages and calls (can be done from anywhere), then field visits, then what is already recorded */
+  const P={pay:"",quotes:"",follow:"",carry:"",visits:"",rec:"",tail:""};
   if(day===t){
     h+=pushBannerHTML(); setTimeout(pushCheck,0);
     /* planned visits from earlier days that were not done */
     const co=carryItems(day);
-    if(co.length) h+=foldSec("carry","undo","زيارات مرحّلة",String(co.length),
+    if(co.length) P.carry=foldSec("carry","undo","زيارات مرحّلة",String(co.length),
       '<div class="v-sub">لديك '+esc(plural(co.length,P_VISIT))+' مخططة لم تُنفَّذ في أيام سابقة: '+esc(co.slice(0,4).map(x=>cname(x.c)).join("، ")+(co.length>4?" وغيرهم":""))+'</div>'
       +'<div class="row grow"><button class="btn sm primary" data-act="carry-move">رحّلها لليوم</button><button class="btn sm" data-act="carry-drop">تجاهلها</button></div>',{tone:"warn"});
     /* money owed on supplied orders: a short list here, the full list in the sheet */
@@ -1270,14 +1272,14 @@ function todayHTML(){
       const ptot=pd.reduce((s,x)=>s+(x.rem||0),0), ptodo=pd.filter(x=>x.stage!=="wait"&&!x.sent).length, urgent=pd.some(x=>(x.stage==="late"||x.stage==="end")&&!x.sent);
       const row=x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+'</b><span class="pw">'+esc((x.o.orderNo?"طلبية "+x.o.orderNo+" · ":"")+(x.stage==="late"?"متأخرة "+plural(x.age-PAY_DAYS,P_DAY):PAY_LAB[x.stage]))+'</span><span class="pw" style="color:var(--ink);font-weight:700"><bdi>'+(x.rem>0?x.rem.toLocaleString("en-US"):"—")+'</bdi> ر.س</span></div>'
         +(phoneOk(normPhone(x.c.phone))?'<button class="btn sm'+(x.stage!=="wait"&&!x.sent?" primary":"")+'" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'" data-oid="'+esc(x.o.id)+'">'+(x.sent?"أُرسل":"تذكير")+'</button>':'')+'</div>';
-      h+=foldSec("pay","wallet","سداد مستحق",pd.length+(ptodo?" · "+ptodo+" تحتاج تذكيراً":""),
+      P.pay=foldSec("pay","wallet","سداد مستحق",pd.length+(ptodo?" · "+ptodo+" تحتاج تذكيراً":""),
         '<div class="prio">'+pd.slice(0,3).map(row).join("")+'</div><button class="btn" data-act="pay-due">عرض كل الطلبيات ('+pd.length+')</button>',
         {tone:urgent?"bad":ptodo?"warn":"accent",sub:"المتبقي <bdi>"+ptot.toLocaleString("en-US")+"</bdi> ر.س على طلبيات تم توريدها"});
     }
   }
   /* 1) visits: necessary visits first, then the day's list (or the generated plan) */
-  if(isFri && !list.length) h+='<div class="empty"><b>الجمعة يوم راحة</b>لا توجد زيارات مخططة.</div>';
-  else if(!list.length) h+=day>t?autoPlanHTML(day):day===t?'<div class="empty"><b>'+(S.isOwner?'لا توجد زيارات مخططة اليوم':'جارٍ تجهيز خطة اليوم…')+'</b>'+(S.isOwner?'':'تُبنى الخطة تلقائياً حسب الأولوية، وتستطيع تعديلها.')+'</div>':'<div class="empty"><b>لا توجد زيارات مخططة لهذا اليوم</b></div>';
+  if(isFri && !list.length) P.visits+='<div class="empty"><b>الجمعة يوم راحة</b>لا توجد زيارات مخططة.</div>';
+  else if(!list.length) P.visits+=day>t?autoPlanHTML(day):day===t?'<div class="empty"><b>'+(S.isOwner?'لا توجد زيارات مخططة اليوم':'جارٍ تجهيز خطة اليوم…')+'</b>'+(S.isOwner?'':'تُبنى الخطة تلقائياً حسب الأولوية، وتستطيع تعديلها.')+'</div>':'<div class="empty"><b>لا توجد زيارات مخططة لهذا اليوم</b></div>';
   else {
     const must=new Set(day===t?dailyPriorities(day).map(x=>x.c.id).concat(newPlaybook().filter(o=>o.touch[1]==="visit"&&o.late>=0).map(o=>o.c.id)):[]);
     const p=list.filter(v=>v.state==="planned"), d=list.filter(v=>v.state!=="planned");
@@ -1288,22 +1290,22 @@ function todayHTML(){
       const shown=S.visitArea?p.filter(v=>(visitArea(S.customers.get(v.customerId))||"بدون منطقة")===S.visitArea):p;
       const chips=cnt.size>1?'<div class="areachips" role="group" aria-label="المنطقة"><button type="button" data-act="area-filter" data-area="" aria-pressed="'+(!S.visitArea)+'">كل المناطق <small>'+p.length+'</small></button>'
         +[...cnt.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([a,n])=>'<button type="button" data-act="area-filter" data-area="'+esc(a)+'" aria-pressed="'+(S.visitArea===a)+'">'+esc(a)+' <small>'+n+'</small></button>').join("")+'</div>':"";
-      h+=foldSec("visits","visit","زيارات بانتظار التنفيذ",S.visitArea?shown.length+" من "+p.length:String(p.length),
+      P.visits+=foldSec("visits","visit","زيارات بانتظار التنفيذ",S.visitArea?shown.length+" من "+p.length:String(p.length),
         chips+'<div class="list">'+shown.map(v=>{ const c=S.customers.get(v.customerId), why=day===t?mustReason(c,day):""; return visitCard(v,{must:!!why||must.has(v.customerId),reason:why?why+(c&&messagedToday(c)?" · راسلته اليوم لكن الزيارة ما زالت ضرورية":""):""}); }).join("")+'</div>',
         {tone:"accent",sub:S.visitArea?"المنطقة: "+esc(S.visitArea):"حسب الأولوية"});
     }
     /* recorded visits live in the follow-up tab: the home page keeps only what is left to do, plus one line of progress */
-    if(d.length) h+='<button type="button" class="fold-link" data-act="goto-recorded"><span class="fold-t"><span class="fold-i" aria-hidden="true" style="--tone:var(--good);--tone-soft:var(--good-soft)">'+FI.check+'</span><span style="min-width:0">سُجّل '+esc(plural(d.length,P_VISIT))+(day===t?" اليوم":"")+'<span class="fold-s">عرضها في المتابعة</span></span></span>'+FCHEV.replace('M6 9l6 6 6-6','M9 6l6 6-6 6').replace('class="fold-chev"','class="fold-chev" style="transform:scaleX(-1)"')+'</button>';
+    if(d.length) P.rec+='<button type="button" class="fold-link" data-act="goto-recorded"><span class="fold-t"><span class="fold-i" aria-hidden="true" style="--tone:var(--good);--tone-soft:var(--good-soft)">'+FI.check+'</span><span style="min-width:0">سُجّل '+esc(plural(d.length,P_VISIT))+(day===t?" اليوم":"")+'<span class="fold-s">عرضها في المتابعة</span></span></span>'+FCHEV.replace('M6 9l6 6 6-6','M9 6l6 6-6 6').replace('class="fold-chev"','class="fold-chev" style="transform:scaleX(-1)"')+'</button>';
   }
   /* 2) follow-ups that need no visit: messages and calls */
-  if(day===t && !isFri) h+=followHTML(day);
+  if(day===t && !isFri) P.follow=followHTML(day);
   /* 3) price requests */
-  if(dow(day)!==5||day===t) h+=quotesHTML(day);
+  if(dow(day)!==5||day===t) P.quotes=quotesHTML(day);
   /* 4) secondary actions in one quiet row */
-  if(!isFri) h+='<div class="row grow"><button class="btn" data-act="open-planner">'+(list.length?"تعديل الخطة":"اختيار يدوي")+'</button><button class="btn" data-act="open-log">زيارة غير مخططة</button></div>';
-  if(S.isOwner&&!isFri) h+='<button class="btn sm ghost" data-act="toggle-off" data-day="'+esc(day)+'">'+(isOff(day)?"إلغاء الاستثناء":"علّم اليوم استثنائياً (مرض أو إجازة أو تدريب)")+'</button>';
-  if(day===t) h+=qualityBanner();
-  return h;
+  if(!isFri) P.tail+='<div class="row grow"><button class="btn" data-act="open-planner">'+(list.length?"تعديل الخطة":"اختيار يدوي")+'</button><button class="btn" data-act="open-log">زيارة غير مخططة</button></div>';
+  if(S.isOwner&&!isFri) P.tail+='<button class="btn sm ghost" data-act="toggle-off" data-day="'+esc(day)+'">'+(isOff(day)?"إلغاء الاستثناء":"علّم اليوم استثنائياً (مرض أو إجازة أو تدريب)")+'</button>';
+  if(day===t) P.tail+=qualityBanner();
+  return h+P.pay+P.quotes+P.follow+P.carry+P.visits+P.rec+P.tail;
 }
 /* the "orders of the day": at most three things that must not be missed, each with the reason */
 function dailyPriorities(day){
