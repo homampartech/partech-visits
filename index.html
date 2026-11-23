@@ -337,7 +337,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-23.6"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-23.7"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -770,7 +770,12 @@ function planCtx(day){
     }
   }
   for(const v of latest.values()){
-    if(v.next&&v.next.date&&v.next.date<=day && !S.visits.some(x=>x.customerId===v.customerId&&x.date>v.date&&x.state!=="missed")) follow.set(v.customerId,v);
+    if(v.next&&v.next.date&&v.next.date<=day && !S.visits.some(x=>x.customerId===v.customerId&&x.date>v.date&&x.state!=="missed")){
+      /* the app now proposes a next step after every result: for a "not interested now" B/C account that follow-up is a message or a call, not a priority visit */
+      const fc=S.customers.get(v.customerId);
+      if(v.result==="notnow"&&fc&&msgOnly(fc,day)) continue;
+      follow.set(v.customerId,v);
+    }
   }
   return {ws,we,visitedWeek,carry,follow};
 }
@@ -1213,8 +1218,10 @@ function dailyPriorities(day){
     if(coveredByInbound(c)) continue;
     const fm=fmOf(c), r=scoreCustomer(c,day,ctx), d=S.der.get(c.id)||{};
     let u=0, why="";
+    const recent=facSince(c,day)<3; /* visited in the last 2 days: a "cooling" or win-back flag is not a reason to return to him again so soon */
     if(r.kind==="carry"){ u=100; why="زيارة مخططة سابقاً لم تُنفَّذ"; }
     else if(r.kind==="follow"){ u=95; why=r.reason; }
+    else if(recent) continue;
     else if(fm&&fm.fading&&fm.tier!=="C"){ u=90+(fm.tier==="A"?8:0); why=fm.gap&&fm.dso!=null?"كان يطلب كل "+fm.gap+" يوماً وقد مرّ "+fm.dso+" يوماً":"اهتمامه يتراجع، تحرّك قبل أن تفقده"; }
     else if(stageOf(c.id)==="new2"){ u=80; why="طلبيتان من ثلاث: ثبّته بالثالثة ليصبح حالياً"; }
     else if(d.status==="lapsed"&&fm&&fm.tier==="A"){ u=70; why="عميل سابق فئة A"+(d.lastOrder?" · آخر طلبية قبل "+diff(d.lastOrder,day)+" يوماً":""); }
