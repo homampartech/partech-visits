@@ -361,7 +361,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-23.10"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-23.12"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -1174,7 +1174,7 @@ function renderView(){
   setTimeout(autoPlanToday,0);
   document.querySelectorAll(".tabs button").forEach(b=>{ if(b.dataset.tab===S.tab) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
   const v=$("#view");
-  if(S.tab==="guide"){ if(S.mounted!=="guide"){ v.innerHTML=notifCardHTML()+guideHTML(); S.mounted="guide"; } const rc=$("#recs"); if(rc) rc.innerHTML=recsHTML(); return; }
+  if(S.tab==="guide"){ if(S.mounted!=="guide"){ v.innerHTML=guideHTML()+notifCardHTML(); S.mounted="guide"; } const rc=$("#recs"); if(rc) rc.innerHTML=recsHTML(); return; }
   if(S.tab==="today"){ v.innerHTML = installHTML()+todayHTML(); S.mounted="today"; }
   else if(S.tab==="dash"){ v.innerHTML = dashHTML(); S.mounted="dash"; }
   else if(S.tab==="customers"){
@@ -1221,21 +1221,36 @@ function foldToggle(id,force){
 }
 /* the follow-up page is built from plain cards: each card becomes a foldable section (same component as the home page), keyed by its title */
 const DASH_FOLD=[ /* [title, id, icon, tone, closed by default, match by prefix] */
-  ["اليوم","d-today","check","accent",0],["هذا الأسبوع","d-week","chart","accent",0],["شهر","d-month","chart","accent",0,1],
+  ["سداد مستحق","d-pay","wallet","accent",0],["اليوم","d-today","check","accent",0],["هذا الأسبوع","d-week","chart","accent",0],["شهر","d-month","chart","accent",0,1],
   ["التسعيرات المفتوحة","d-openq","tag","warn",0],["العملاء","d-clients","users","accent",0],["المال","d-money","wallet","good",0],["إنجازاتك","d-ach","star","good",0],
   ["ملخص سريع","d-sum","chart","accent",1],["تفصيل الأسبوع","d-week2","chart","accent",1],["الخطة مقابل الفعلي","d-plan","chart","accent",1],
   ["الزيارات المنجزة","d-chart","chart","accent",1,1],["جودة الزيارات","d-quality","check","accent",1],["الفرص والتنبيهات","d-opps","alert","warn",1],
   ["تدريب","d-train","book","accent",1,1],["التسعير والإغلاق","d-quotes","tag","accent",1],["فئات العملاء","d-tiers","users","accent",1],
   ["أسباب عدم الاهتمام","d-reasons","alert","warn",1],["قاعدة العملاء","d-base","users","accent",1],["آخر النشاط","feed","chat","accent",1]
 ];
+/* the same order as the home page: money, price requests, customers (follow-up), visits, then what is recorded, then achievements */
+const DASH_ORDER=["d-pay","d-money","d-openq","d-quotes","d-clients","d-tiers","d-opps","d-reasons","d-base","d-today","d-week","d-month","d-quality","d-chart","d-train","d-sum","d-week2","d-plan","feed","d-ach"];
 function foldifyDash(html){
-  const used={};
-  return html.replace(/<section class="card"(?: id="[^"]*")?><h3>([\s\S]*?)<\/h3>([\s\S]*?)<\/section>/g,(m,head,body)=>{
+  const used={}, parts=[];
+  const rest=html.replace(/<section class="card"(?: id="[^"]*")?><h3>([\s\S]*?)<\/h3>([\s\S]*?)<\/section>/g,(m,head,body)=>{
     const sm=head.match(/^([\s\S]*?)\s*<small>([\s\S]*?)<\/small>\s*$/), title=(sm?sm[1]:head).trim(), sub=sm?sm[2].trim():"";
     const r=DASH_FOLD.find(x=>x[5]?title.startsWith(x[0]):title===x[0])||[title,"d-"+hash(title),"chart","accent",0];
     let id=r[1]; if(used[id]) id+="-"+used[id]; used[r[1]]=(used[r[1]]||0)+1;
-    return foldSec(id,r[2],title,"",body,{tone:r[3],sub,closed:!!r[4]});
+    let badge=""; if(id==="feed"){ const n=S.visits.filter(v=>v.state==="done"&&v.date===todayStr()).length; badge=n?n+" اليوم":""; } /* recorded visits live here: today's count stays visible while folded */
+    parts.push({id,idx:DASH_ORDER.indexOf(id)<0?99:DASH_ORDER.indexOf(id),html:foldSec(id,r[2],title,badge,body,{tone:r[3],sub,closed:!!r[4]})});
+    return "";
   });
+  parts.sort((a,b)=>a.idx-b.idx);
+  return parts.map(p=>p.html).join("")+rest;
+}
+/* money owed on supplied orders, first on the page like on the home page */
+function dashPayCard(){
+  const pd=payDue(); if(!pd.length) return "";
+  const tot=pd.reduce((s,x)=>s+(x.rem||0),0), todo=pd.filter(x=>x.stage!=="wait"&&!x.sent).length, late=pd.filter(x=>x.stage==="late").length;
+  return '<section class="card"><h3>سداد مستحق <small>طلبيات تم توريدها</small></h3><div class="tiles">'
+    +'<div class="tile"><b>'+pd.length+'</b><span>طلبيات غير مسدّدة</span></div><div class="tile"><b>'+Math.round(tot).toLocaleString("en-US")+'</b><span>المتبقي (ر.س)</span></div>'
+    +'<div class="tile"><b>'+todo+'</b><span>تحتاج تذكيراً</span></div><div class="tile"><b>'+late+'</b><span>متأخرة (بعد 7 أيام)</span></div></div>'
+    +'<button class="btn" data-act="pay-due">عرض الطلبيات</button></section>';
 }
 function visitArea(c){ return String(c&&(facOf(c).area||c.area)||"").trim(); }
 function todayHTML(){
@@ -1305,7 +1320,7 @@ function todayHTML(){
   if(!isFri) P.tail+='<div class="row grow"><button class="btn" data-act="open-planner">'+(list.length?"تعديل الخطة":"اختيار يدوي")+'</button><button class="btn" data-act="open-log">زيارة غير مخططة</button></div>';
   if(S.isOwner&&!isFri) P.tail+='<button class="btn sm ghost" data-act="toggle-off" data-day="'+esc(day)+'">'+(isOff(day)?"إلغاء الاستثناء":"علّم اليوم استثنائياً (مرض أو إجازة أو تدريب)")+'</button>';
   if(day===t) P.tail+=qualityBanner();
-  return h+P.pay+P.quotes+P.follow+P.carry+P.visits+P.rec+P.tail;
+  return h+P.pay+P.quotes+P.follow+P.carry+P.visits+P.tail; /* recorded visits are not shown here: they live in the follow-up tab */
 }
 /* the "orders of the day": at most three things that must not be missed, each with the reason */
 function dailyPriorities(day){
@@ -1474,7 +1489,7 @@ function dashHTML(){
   const chased=openQ.filter(q=>diff(quoteBaseDate(q),t)>=2), chasedPct=chased.length?Math.round(chased.filter(q=>quoteDone(q).length>0).length/chased.length*100):100;
   const rate=st.month.n?Math.round(st.month.w/st.month.n*100):0, tr=Math.round(cfg.dailyWins/cfg.dailyQuotes*100);
   const cur=[...S.customers.values()].filter(c=>stOf(c.id)==="current"), covered=cur.filter(c=>facSince(c,t)<=cadenceDays(c)*1.2).length;
-  let h='<section class="card"><h3>اليوم</h3>'+kpi("زيارات",vDay,cfg.dailyTarget)+kpi("طلبات تسعير",st.day.n,cfg.dailyQuotes)+kpi("إغلاقات",st.day.w,cfg.dailyWins)+'</section>';
+  let h=dashPayCard()+'<section class="card"><h3>اليوم</h3>'+kpi("زيارات",vDay,cfg.dailyTarget)+kpi("طلبات تسعير",st.day.n,cfg.dailyQuotes)+kpi("إغلاقات",st.day.w,cfg.dailyWins)+'</section>';
   h+='<section class="card"><h3>هذا الأسبوع <small>'+esc(dShort(ws))+' – '+esc(dShort(addDays(ws,5)))+'</small></h3>'
     +kpi("زيارات",vWeek,cfg.dailyTarget*6,{pace:paceW})+kpi("إغلاقات",st.week.w,cfg.weekWins,{pace:paceW})+kpi("طلبات تسعير",st.week.n,cfg.dailyQuotes*6,{pace:paceW})
     +kpi("زيارات أولى لعملاء جدد",freshVisits(ws,we,null,true).length,cfg.weeklyNew,{pace:paceW})+'</section>';
@@ -1622,62 +1637,88 @@ function chart14(t){
 }
 
 /* ---------- GUIDE ---------- */
+/* the guide follows the same order as the home page: what is due (money, price requests, messages), then visits, then how the app works, then setup. Same foldable component as every other page. */
 function guideHTML(){
+  const g=(id,icon,title,body,closed)=>foldSec("g-"+id,icon,title,"",'<div class="gb" style="padding:0">'+body+'</div>',{closed:!!closed});
   return '<div class="guide list">'
-  +'<div class="card" id="recs"></div>'
-  +'<div class="card"><h3>الخطة باختصار</h3><div style="font-size:14px;display:flex;flex-direction:column;gap:6px">'
-  +'<div><b>'+S.cfg.dailyTarget+' زيارات كل يوم</b> بين حاليين وسابقين وجدد، ووتيرة الزيارة حسب فئة العميل: A كل أسبوعين، وB شهرياً، وC كل 5 إلى 6 أسابيع، وبينها رسالة أو اتصال. والعميل الجديد يُزار أسبوعياً حتى طلبيته الثالثة، وتصله رسالة شكر بعد الزيارة مباشرة ثم متابعة بعد 3 أيام.</div>'
-  +'<div><b>'+S.cfg.dailyQuotes+' طلبات تسعير يومياً</b> من عملائك وإغلاق <b>'+S.cfg.dailyWins+'</b> منها على الأقل (نحو '+S.cfg.workDaysMonth+' يوم عمل في الشهر، والجمعة إجازة). لا تُدخل شيئاً بيدك: طلبات التسعير وإغلاقاتها والطلبيات تأتي تلقائياً من برنامج العمليات.</div>'
-  +'<div><b>'+S.cfg.weeklyNew+' زيارة أسبوعياً لعملاء جدد</b>، والهدف تحويل '+S.cfg.monthlyConv+' منهم إلى حاليين كل شهر.</div>'
-  +'<div><b>مسار العميل الجديد (90 يوماً):</b> زيارة ثم رسالة شكر في اليوم نفسه، ورسالة فيها قيمة في اليوم 3، وزيارة أو اتصال في اليوم 7 مع طلب تجربة صغيرة، واتصال في 14، وزيارة في 21، ومراجعة في 30، ثم رسالة كل أسبوعين وزيارة شهرية. يظهر لك ما هو مستحق اليوم في بطاقة «عملاء جدد: لمسة اليوم»، وبعد 90 يوماً بلا طلبية يتحول إلى متابعة بطيئة.</div>'
-  +'<div><b>الجديد يصبح حالياً</b> بعد '+S.cfg.ordersToConvert+' طلبيات. <b>الحالي يصبح سابقاً</b> إذا مر '+S.cfg.lapsedDays+' يوماً على آخر طلبية. <b>السابق يعود حالياً</b> بأول طلبية جديدة.</div></div></div>'
-  +'<details open><summary>روتين يومك</summary><div class="gb"><ol>'
-  +'<li><b>بداية اليوم:</b> خطط '+S.cfg.dailyTarget+' زيارات من تبويب «اليوم». ابدأ بالحاليين الذين لم تزرهم هذا الأسبوع، ثم السابقين، ثم الجدد.</li>'
-  +'<li><b>رتّب الزيارات حسب المنطقة</b> (علي بن علي، أم الحمام، الصناعية) لتقلل وقت التنقل وتزيد عدد الزيارات.</li>'
-  +'<li><b>قبل كل زيارة:</b> اقرأ آخر ملاحظة والخطوة المتفق عليها، وحدد هدفاً واحداً واضحاً.</li>'
-  +'<li><b>بعد كل زيارة مباشرة:</b> سجّل النتيجة والملاحظات خلال 5 دقائق، ولا تؤجلها لآخر اليوم.</li>'
-  +'<li><b>نهاية اليوم:</b> راجع الخطوات القادمة وخطط زيارات الغد.</li></ol></div></details>'
-  +'<details><summary>الزيارة الاحترافية في 6 خطوات</summary><div class="gb"><ol>'
-  +'<li><b>هدف واضح قبل الدخول:</b> طلبية، تعريف، استرجاع، أو متابعة.</li>'
-  +'<li><b>افتتاح قصير وشخصي:</b> اسأل عن ضغط الشغل في الورشة اليوم.</li>'
-  +'<li><b>اسأل قبل أن تعرض:</b><div class="say">«وش السيارات اللي عندكم هالأسبوع؟ فيه قطع تأخرت عليكم أو صعب تلقونها؟»</div></li>'
-  +'<li><b>اربط بارتك بالاحتياج:</b> سرعة التوصيل، توفر القطعة، السعر، والمتابعة الشخصية.</li>'
-  +'<li><b>اطلب الطلبية صراحة:</b><div class="say">«خلني أسجل لك الطلبية الحين وتوصلك اليوم.»</div></li>'
-  +'<li><b>لا تخرج بدون خطوة قادمة بموعد:</b> متى الزيارة القادمة؟ ماذا سأحضر له؟</li></ol>'
-  +'<div>زر «المرشد» على كل زيارة مخططة يعرض لك خطوات مخصصة لمرحلة هذا العميل (جديد، حالي، سابق) ونوع منشأته. وقائمة الجودة عند التسجيل تتغير بنفس الطريقة.</div></div></details>'
-  +'<details><summary>فئات العملاء A / B / C والاهتمام</summary><div class="gb">'
-  +'<div>تُحسب فئة كل منشأة من: نوعها وحجمها (فروع وأسطول)، ونشاطها الفعلي (عدد الطلبيات)، وقيمة طلباتها، وهامش الربح. لا تدخل نتائج الزيارات في الفئة. المنشأة الكبيرة تبدأ بفئة عالية حتى قبل أول طلبية، والورشة الصغيرة المنتظمة ترتفع بأدائها.</div>'
-  +'<div><b>الفرص الكبيرة:</b> المنشأة الجديدة الكبيرة تظهر في بطاقة «الفرص والتنبيهات» بمرحلتها (تعارف، عرض، تجربة، اعتماد) وتُحسب المرحلة تلقائياً من زياراتك وتسعيراتك وطلبياتك. وإذا طلب عميل '+S.cfg.quoteAlert+' تسعيرات أو أكثر بلا أي إغلاق يظهر تنبيه لنفهم السبب.</div>'
-  +'<div><b>الاهتمام</b> يُحسب من نتائج زياراتك ومن الطلبيات الفعلية وإيقاع طلب العميل المعتاد. إذا تأخر العميل عن إيقاعه تظهر «اهتمامه يبرد» وتُرفع أولويته في خطتك.</div></div></details>'
-  +'<details><summary>البيانات الإلزامية</summary><div class="gb"><ul>'
-  +'<li><b>العميل:</b> اسم الشخص، المنصب، اسم المنشأة، المنطقة، جوال صحيح.</li>'
-  +'<li><b>الزيارة:</b> النتيجة، ملاحظة مفصلة، هل تحقق الهدف، خطوة قادمة بتاريخ. وإن كانت طلبية: القيمة ورقمها. وإن كانت «غير مهتم»: السبب.</li>'
-  +'<li>التطبيق لا يحفظ الناقص، ويعرض لك ما ينقص بوضوح. وشاشة «جودة البيانات» في تبويب العملاء تجمع كل ما يحتاج استكمالاً.</li></ul></div></details>'
-  +'<details><summary>حسب نوع العميل</summary><div class="gb">'
-  +'<div class="obj"><b><span class="chip current">حالي</span> الهدف: طلبية كل أسبوع</b>اسأل عن القطع المتكررة واقترح طلبية ثابتة. اسأل عن رضاه عن آخر طلبية، فالعميل الحالي أسهل بيع وأغلى خسارة.</div>'
-  +'<div class="obj"><b><span class="chip lapsed">سابق</span> الهدف: طلبية واحدة تعيده</b>اعرف سبب التوقف أولاً واستمع بدون دفاع. اعرض حلاً للسبب وطلبية تجربة صغيرة، وتابعها بنفسك حتى التسليم.</div>'
-  +'<div class="obj"><b><span class="chip new">جديد</span> الهدف: 3 طلبيات ليصبح حالياً</b>ابدأ بطلبية صغيرة سهلة النجاح، وتعرّف على صاحب قرار الشراء. زره أسبوعياً حتى الطلبية الثالثة.</div></div></details>'
-  +'<details><summary>الرد على الاعتراضات</summary><div class="gb">'
-  +'<div class="obj"><b>«عندي مورد ثابت»</b>«ممتاز، خلني أكون خيارك الثاني لما تتأخر عليك قطعة. جربنا بطلبية وحدة وقارن.»</div>'
-  +'<div class="obj"><b>«السعر غالي»</b>اسأل: مقارنة بمين وعلى أي قطعة؟ ثم ذكّره بتكلفة وقوف السيارة في الورشة يوماً إضافياً.</div>'
-  +'<div class="obj"><b>«مو محتاج الحين»</b>«متى عادة تطلب؟ أمر عليك ذاك اليوم.» وسجّل الموعد كخطوة قادمة.</div>'
-  +'<div class="obj"><b>«تأخرتوا علي المرة الماضية»</b>اعتذر واسأل عن التفاصيل، وارفعها للإدارة، واعرض متابعة شخصية لطلبيته القادمة.</div></div></details>'
-  +'<details><summary>كيف تكتب ملاحظة مفيدة</summary><div class="gb">'
-  +'<div>الملاحظة الجيدة تجيب عن أربعة أسئلة: <b>ماذا يحتاج العميل؟ ماذا قال؟ ماذا اتفقنا؟ متى الخطوة القادمة؟</b></div>'
-  +'<div class="say">مثال: «يحتاج فحمات وفلاتر لسيارات كامري أسبوعياً، يشتري حالياً من محل بالحي. أخذت طلبية تجربة 4 فحمات. أمر عليه الأحد للتأكد من التسليم وأعرض طلبية الفلاتر.»</div>'
-  +'<div>تجنب الملاحظات العامة مثل «تمت الزيارة» أو «العميل مهتم».</div></div></details>'
-  +'<details><summary>كيف يقترح التطبيق خطة يومك</summary><div class="gb">'
-  +'<div>زر «اقترح خطة اليوم» يختار لك الزيارات بهذا الترتيب، وبجانب كل عميل سبب اختياره:</div><ol>'
-  +'<li><b>زيارات مرحّلة</b> لم تنفّذها في أيام سابقة.</li>'
-  +'<li><b>متابعات مستحقة</b> وعدت بها العميل في زيارة سابقة.</li>'
-  +'<li><b>حصة الجدد:</b> زيارتان أسبوعياً موزعة على أيام الأسبوع.</li>'
-  +'<li><b>حاليون لم تزرهم هذا الأسبوع</b>، الأقدم زيارة أولاً.</li>'
-  +'<li><b>سابقون للاسترجاع</b>، ثم باقي العملاء حسب الأولوية.</li></ol>'
-  +'<div>العميل المميز بنجمة ★ (يحددها المدير) يتقدم في الترتيب. ويجمع التطبيق زيارات المنطقة الواحدة معاً لتوفير التنقل. كل شيء قابل للتعديل قبل الاعتماد وبعده.</div></div></details>'
-  +'<details><summary>تثبيت التطبيق على الجوال</summary><div class="gb"><ol>'
-  +'<li>افتح رابط التطبيق في متصفح <b>Chrome</b> على الأندرويد.</li>'
-  +'<li>اضغط زر <b>تثبيت</b> إن ظهر، أو افتح قائمة Chrome (⋮) واختر <b>تثبيت التطبيق</b> أو <b>إضافة إلى الشاشة الرئيسية</b>.</li>'
-  +'<li>افتح التطبيق بعدها من أيقونته، وسيبقى تسجيل دخولك محفوظاً.</li></ol></div></details>'
+  +foldSec("g-recs","star","ملخصك وتوصياتك","",'<div id="recs" style="display:flex;flex-direction:column;gap:10px"></div>',{tone:"good",sub:"ما يحتاج انتباهك اليوم وهذا الأسبوع"})
+  +g("plan","chart","الخطة باختصار",
+     '<div><b>'+S.cfg.dailyTarget+' زيارات كل يوم</b> بين حاليين وسابقين وجدد، ووتيرة الزيارة حسب فئة العميل: A كل أسبوعين، وB شهرياً، وC كل 5 إلى 6 أسابيع، وبينها رسالة أو اتصال. والعميل الجديد يُزار أسبوعياً حتى طلبيته الثالثة، وتصله رسالة شكر بعد الزيارة مباشرة ثم متابعة بعد 3 أيام.</div>'
+    +'<div><b>'+S.cfg.dailyQuotes+' طلبات تسعير يومياً</b> من عملائك وإغلاق <b>'+S.cfg.dailyWins+'</b> منها على الأقل (نحو '+S.cfg.workDaysMonth+' يوم عمل في الشهر، والجمعة إجازة). لا تُدخل شيئاً بيدك: طلبات التسعير وإغلاقاتها والطلبيات تأتي تلقائياً من برنامج العمليات.</div>'
+    +'<div><b>'+S.cfg.weeklyNew+' زيارة أسبوعياً لعملاء جدد</b>، والهدف تحويل '+S.cfg.monthlyConv+' منهم إلى حاليين كل شهر.</div>'
+    +'<div><b>مسار العميل الجديد (90 يوماً):</b> زيارة ثم رسالة شكر في اليوم نفسه، ورسالة فيها قيمة في اليوم 3، وزيارة أو اتصال في اليوم 7 مع طلب تجربة صغيرة، واتصال في 14، وزيارة في 21، ومراجعة في 30، ثم رسالة كل أسبوعين وزيارة شهرية. وبعد 90 يوماً بلا طلبية يتحول إلى متابعة بطيئة.</div>'
+    +'<div><b>الجديد يصبح حالياً</b> بعد '+S.cfg.ordersToConvert+' طلبيات. <b>الحالي يصبح سابقاً</b> إذا مر '+S.cfg.lapsedDays+' يوماً على آخر طلبية. <b>السابق يعود حالياً</b> بأول طلبية جديدة.</div>')
+  +g("routine","check","روتين يومك",
+     '<ol><li><b>بداية اليوم:</b> افتح تبويب «اليوم» وابدأ من الأعلى: سداد مستحق، ثم طلبات التسعير، ثم المتابعة بدون زيارة، ثم الزيارات.</li>'
+    +'<li><b>رتّب الزيارات حسب المنطقة:</b> استخدم شريط المناطق في قسم «زيارات بانتظار التنفيذ» لتقلل التنقل. أما الرسائل والاتصالات فتُرسل من أي مكان ولا فلتر لها.</li>'
+    +'<li><b>قبل كل زيارة:</b> اقرأ آخر ملاحظة والخطوة المتفق عليها.</li>'
+    +'<li><b>بعد كل زيارة مباشرة:</b> سجّل النتيجة خلال 5 دقائق، ولا تؤجلها لآخر اليوم.</li>'
+    +'<li><b>نهاية اليوم:</b> راجع الخطوات القادمة وما سُجّل في تبويب «المتابعة».</li></ol>')
+  +g("pay","wallet","متابعة السداد",
+     '<div>قسم «سداد مستحق» يعرض الطلبيات التي <b>تم توريدها</b> ولم تُسدَّد بالكامل، والمبلغ هو <b>المتبقي</b> (الإيراد ناقص المدفوع) كما في تطبيق العمليات.</div>'
+    +'<ol><li><b>مهلة السداد 7 أيام من تاريخ التوريد.</b></li>'
+    +'<li><b>اليوم 4 (منتصف المدة):</b> زر «تذكير» يفتح رسالة واتساب جاهزة فيها رقم الطلبية والمبلغ المتبقي.</li>'
+    +'<li><b>اليوم 7 (آخر يوم):</b> رسالة أوضح بنهاية المدة.</li>'
+    +'<li><b>بعد اليوم 7:</b> تظهر «متأخرة» برسالة متابعة، ولا تتكرر في اليوم نفسه.</li></ol>'
+    +'<div>اضغط «افتح واتساب وأرسل» لتُسجَّل الرسالة ولا تتكرر. ولا تُحسب رسائل السداد كمتابعة مبيعات.</div>')
+  +g("quotes","tag","طلبات التسعير ومتابعتها",
+     '<div>تأتي طلبات التسعير تلقائياً من العمليات. وبعد أن تُعتمد التسعيرة داخلياً يقترح التطبيق متابعتها بهذا الإيقاع:</div>'
+    +'<ol><li>رسالة بعد ساعة من الاعتماد.</li><li>اتصال بعد 5 ساعات.</li><li>رسالة في اليوم التالي.</li><li>رسالة في اليوم الثالث.</li><li>رسالة أخيرة في اليوم السابع، ثم تختفي التسعيرة من التطبيق.</li></ol>'
+    +'<div>زر «لا يريد» يُخرج التسعيرة من مهامك. وشارة قسم التسعير تُظهر عدد المستحق منها.</div>')
+  +g("msgs","chat","المتابعة بدون زيارة: رسائل واتصالات",
+     '<div>رسالة واحدة تكفي وتُحسب متابعة، ويختفي العميل من القائمة بعد إرسالها.</div>'
+    +'<ul><li>اضغط <b>«افتح واتساب وأرسل»</b> وليس «نسخ»: «نسخ» لا يسجّل الرسالة فيبقى العميل في القائمة.</li>'
+    +'<li>زر «صياغة أخرى» يبدّل النص، ويمكنك تعديله قبل الإرسال.</li>'
+    +'<li>زر «اتصال» يسجّل المكالمة تلقائياً.</li></ul>')
+  +g("visit","visit","الزيارة الاحترافية في 6 خطوات",
+     '<ol><li><b>هدف واضح قبل الدخول:</b> طلبية، تعريف، استرجاع، أو متابعة.</li>'
+    +'<li><b>افتتاح قصير وشخصي:</b> اسأل عن ضغط الشغل في الورشة اليوم.</li>'
+    +'<li><b>اسأل قبل أن تعرض:</b><div class="say">«وش السيارات اللي عندكم هالأسبوع؟ فيه قطع تأخرت عليكم أو صعب تلقونها؟»</div></li>'
+    +'<li><b>اربط بارتك بالاحتياج:</b> سرعة التوصيل، توفر القطعة، السعر، والمتابعة الشخصية.</li>'
+    +'<li><b>اطلب الطلبية صراحة:</b><div class="say">«خلني أسجل لك الطلبية الحين وتوصلك اليوم.»</div></li>'
+    +'<li><b>لا تخرج بدون خطوة قادمة بموعد:</b> متى الزيارة القادمة؟ ماذا سأحضر له؟</li></ol>'
+    +'<div>زر «المرشد» على كل زيارة مخططة يعرض لك خطوات مخصصة لمرحلة هذا العميل (جديد، حالي، سابق) ونوع منشأته.</div>',true)
+  +g("result","check","تسجيل نتيجة الزيارة",
+     '<ul><li><b>النتيجة هي الحقل الوحيد المطلوب</b> (طلبية، مهتم، غير مهتم، لم يتواجد). باقي الحقول اختيارية.</li>'
+    +'<li>التطبيق <b>يحدد الهدف وطريقة التواصل</b>، ويقترح <b>الخطوة القادمة وموعدها</b> حسب النتيجة ومرحلة العميل. يمكنك تغييرهما بزر «تغيير الخطوة أو الموعد».</li>'
+    +'<li><b>الملاحظة السريعة</b> اختيارية لكنها مفيدة: تظهر لك قبل زيارتك القادمة لنفس العميل.</li>'
+    +'<li>إن كانت «غير مهتم»: اختر السبب. وفي «تفاصيل إضافية» قائمة ما أنجزته وأشخاص آخرون قابلتهم من المنشأة.</li>'
+    +'<li><b>العميل الجديد:</b> اسم الشخص، المنصب، اسم المنشأة، المنطقة، جوال صحيح. وشاشة «جودة البيانات» في تبويب العملاء تجمع ما ينقص.</li></ul>',true)
+  +g("types","users","حسب نوع العميل",
+     '<div class="obj"><b><span class="chip current">حالي</span> الهدف: طلبية كل أسبوع</b>اسأل عن القطع المتكررة واقترح طلبية ثابتة. اسأل عن رضاه عن آخر طلبية، فالعميل الحالي أسهل بيع وأغلى خسارة.</div>'
+    +'<div class="obj"><b><span class="chip lapsed">سابق</span> الهدف: طلبية واحدة تعيده</b>اعرف سبب التوقف أولاً واستمع بدون دفاع. اعرض حلاً للسبب وطلبية تجربة صغيرة، وتابعها بنفسك حتى التسليم.</div>'
+    +'<div class="obj"><b><span class="chip new">جديد</span> الهدف: 3 طلبيات ليصبح حالياً</b>ابدأ بطلبية صغيرة سهلة النجاح، وتعرّف على صاحب قرار الشراء. زره أسبوعياً حتى الطلبية الثالثة.</div>',true)
+  +g("obj","chat","الرد على الاعتراضات",
+     '<div class="obj"><b>«عندي مورد ثابت»</b>«ممتاز، خلني أكون خيارك الثاني لما تتأخر عليك قطعة. جربنا بطلبية وحدة وقارن.»</div>'
+    +'<div class="obj"><b>«السعر غالي»</b>اسأل: مقارنة بمين وعلى أي قطعة؟ ثم ذكّره بتكلفة وقوف السيارة في الورشة يوماً إضافياً.</div>'
+    +'<div class="obj"><b>«مو محتاج الحين»</b>«متى عادة تطلب؟ أمر عليك ذاك اليوم.» وسجّل الموعد كخطوة قادمة.</div>'
+    +'<div class="obj"><b>«تأخرتوا علي المرة الماضية»</b>اعتذر واسأل عن التفاصيل، وارفعها للإدارة، واعرض متابعة شخصية لطلبيته القادمة.</div>',true)
+  +g("notes","book","كيف تكتب ملاحظة مفيدة",
+     '<div>الملاحظة الجيدة تجيب عن أربعة أسئلة: <b>ماذا يحتاج العميل؟ ماذا قال؟ ماذا اتفقنا؟ متى الخطوة القادمة؟</b></div>'
+    +'<div class="say">مثال: «يحتاج فحمات وفلاتر لسيارات كامري أسبوعياً، يشتري حالياً من محل بالحي. أخذت طلبية تجربة 4 فحمات. أمر عليه الأحد للتأكد من التسليم وأعرض طلبية الفلاتر.»</div>'
+    +'<div>تجنب الملاحظات العامة مثل «تمت الزيارة» أو «العميل مهتم».</div>',true)
+  +g("autoplan","chart","كيف يقترح التطبيق خطة يومك",
+     '<div>زر «اقترح خطة اليوم» يختار لك الزيارات بهذا الترتيب، وبجانب كل عميل سبب اختياره:</div><ol>'
+    +'<li><b>زيارات مرحّلة</b> لم تنفّذها في أيام سابقة.</li>'
+    +'<li><b>متابعات مستحقة</b> وعدت بها العميل في زيارة سابقة.</li>'
+    +'<li><b>حصة الجدد:</b> زيارتان أسبوعياً موزعة على أيام الأسبوع.</li>'
+    +'<li><b>حاليون لم تزرهم هذا الأسبوع</b>، الأقدم زيارة أولاً.</li>'
+    +'<li><b>سابقون للاسترجاع</b>، ثم باقي العملاء حسب الأولوية.</li></ol>'
+    +'<div>العميل المميز بنجمة ★ (يحددها المدير) يتقدم في الترتيب. ويجمع التطبيق زيارات المنطقة الواحدة معاً لتوفير التنقل. كل شيء قابل للتعديل قبل الاعتماد وبعده.</div>',true)
+  +g("tiers","star","فئات العملاء A / B / C والاهتمام",
+     '<div>تُحسب فئة كل منشأة من: نوعها وحجمها (فروع وأسطول)، ونشاطها الفعلي (عدد الطلبيات)، وقيمة طلباتها، وهامش الربح. لا تدخل نتائج الزيارات في الفئة. المنشأة الكبيرة تبدأ بفئة عالية حتى قبل أول طلبية، والورشة الصغيرة المنتظمة ترتفع بأدائها.</div>'
+    +'<div><b>الاهتمام</b> يُحسب من نتائج زياراتك ومن الطلبيات الفعلية وإيقاع طلب العميل المعتاد. «لم يتواجد» لا يخفضه، والطلبية الحقيقية ترفعه. وإذا تأخر العميل عن إيقاعه تظهر «اهتمامه يبرد» وتُرفع أولويته.</div>'
+    +'<div><b>الفرص الكبيرة:</b> المنشأة الجديدة الكبيرة تظهر في «الفرص والتنبيهات» (في تبويب المتابعة) بمرحلتها، وإذا طلب عميل '+S.cfg.quoteAlert+' تسعيرات أو أكثر بلا أي إغلاق يظهر تنبيه لنفهم السبب.</div>'
+    +'<div>علامة ★ يضعها المدير فقط وتقدّم العميل في خطة اليوم دون أن تغيّر فئته.</div>',true)
+  +g("offline","alert","العمل بلا اتصال",
+     '<ul><li>افتح التطبيق مرة وأنت متصل ليحفظ نسخة من بياناتك على جهازك.</li>'
+    +'<li>بلا إنترنت يفتح بتلك النسخة، وما تسجّله (زيارة، رسالة، تعديل) يُحفظ على الجهاز ويظهر فوراً.</li>'
+    +'<li>يظهر في أعلى الشاشة شريط بعدد التغييرات المنتظرة، وتُرسل تلقائياً بالترتيب عند عودة الاتصال.</li>'
+    +'<li>عند الرجوع للتطبيق يعيد قراءة بيانات الجميع خلال ثوانٍ، فترى عمل زملائك.</li></ul>',true)
+  +g("install","book","تثبيت التطبيق على الجوال",
+     '<ol><li>افتح رابط التطبيق في متصفح <b>Chrome</b> على الأندرويد.</li>'
+    +'<li>اضغط زر <b>تثبيت</b> إن ظهر، أو افتح قائمة Chrome (⋮) واختر <b>تثبيت التطبيق</b> أو <b>إضافة إلى الشاشة الرئيسية</b>.</li>'
+    +'<li>افتح التطبيق بعدها من أيقونته، وسيبقى تسجيل دخولك محفوظاً.</li></ol>',true)
   +'</div>';
 }
 
@@ -2508,7 +2549,7 @@ function recsHTML(){
     if(stuck.length) M.unshift(stuck.length===1?"عميل جديد بلا أي لمسة منذ 5 أيام أو أكثر: "+stuck[0].name+".":stuck.length+" عملاء جدد بلا أي لمسة منذ 5 أيام أو أكثر، أولهم "+stuck[0].name+".");
   }
   const sec=(t,a)=>'<h2 class="sec">'+t+'</h2><ul class="recs">'+a.slice(0,4).map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul>';
-  return '<h3>ملخصك وتوصياتك</h3>'+sec("اليوم",D.length?D:["لا ملاحظات الآن."])+sec("هذا الأسبوع",W)+(M.length?sec("للمدير",M):"");
+  return sec("اليوم",D.length?D:["لا ملاحظات الآن."])+sec("هذا الأسبوع",W)+(M.length?sec("للمدير",M):"");
 }
 function ring(val,target,color,label){
   const r=34, c=2*Math.PI*r, p=Math.min(1,target?val/target:0);
@@ -2905,8 +2946,8 @@ function notifCardHTML(){
   else if(Notification.permission==="denied") st="التنبيهات محظورة لهذا الموقع. افتح إعدادات المتصفح للموقع واسمح بالإشعارات ثم أعد فتح التطبيق.";
   else if(S.pushOn) { st="التنبيهات مفعّلة على هذا الجهاز."; btn='<button class="btn sm" data-act="push-test">جرّب تنبيهاً الآن</button>'; }
   else { st="لم تُفعَّل التنبيهات على هذا الجهاز بعد."; btn='<button class="btn sm primary" data-act="push-on">تفعيل</button>'; }
-  return '<div class="guide list"><div class="card"><h3>التنبيهات</h3><div class="v-sub">'+st+'</div>'+(btn?'<div class="row" style="margin-top:8px">'+btn+'</div>':"")
-    +'<div class="v-sub" style="margin-top:8px">الإصدار '+esc(APP_VERSION)+' <button class="btn sm ghost" data-act="check-update">تحقق من التحديث</button></div></div></div>';
+  return '<div class="guide list">'+foldSec("g-notif","alert","التنبيهات والتحديث","",'<div class="v-sub">'+st+'</div>'+(btn?'<div class="row">'+btn+'</div>':"")
+    +'<div class="v-sub">الإصدار '+esc(APP_VERSION)+' <button class="btn sm ghost" data-act="check-update">تحقق من التحديث</button></div>',{tone:S.pushOn?"good":"warn"})+'</div>';
 }
 async function pushTest(){
   try{
