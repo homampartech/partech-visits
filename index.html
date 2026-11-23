@@ -337,7 +337,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-23.1"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-23.2"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -926,7 +926,7 @@ async function fetchAllVisits(){
 }
 async function loadAll(retried){
   try{
-    const [c,cfg,team,visits,fac,ord,cost,qts,msgs,comm] = await Promise.all([
+    const [c,cfg,team,visits,fac,ord,cost,qts,msgs,comm,pay] = await Promise.all([
       sb.from("customers").select("*"),
       sb.from("config").select("data").eq("id",1).maybeSingle(),
       sb.from("team").select("*"),
@@ -936,8 +936,10 @@ async function loadAll(retried){
       sb.from("order_costs").select("*"),
       sb.from("quotes").select("*"),
       sb.from("messages").select("*"),
-      sb.from("commission").select("*")
+      sb.from("commission").select("*"),
+      sb.from("order_payment").select("*")
     ]);
+    S.pay = new Map(((pay&&!pay.error?pay.data:[])||[]).map(r=>[r.order_id,r.fully_paid])); /* paid / unpaid per order, synced from the operations app (the view exposes nothing else) */
     S.commission = new Map(((comm&&!comm.error?comm.data:[])||[]).map(r=>[r.month,r]));
     S.messages=[]; ((msgs.error?[]:msgs.data)||[]).forEach(putMsg);
     S.quotes = ((qts.error?[]:qts.data)||[]).map(rowToQuote).filter(q=>q.by==="ops-sync");
@@ -1043,6 +1045,9 @@ function todayHTML(){
     h+=pushBannerHTML(); setTimeout(pushCheck,0);
     const qd=quoteDue(day);
     if(qd.length) h+='<section class="notice warnrow"><div><b>'+plural(qd.length,["تسعيرة واحدة تنتظر متابعتك","تسعيرتان تنتظران متابعتك","تسعيرات تنتظر متابعتك","تسعيرة تنتظر متابعتك"])+' اليوم</b></div><button class="btn sm primary" data-act="goto-quotes">اذهب إليها</button></section>';
+    const pd=payDue();
+    if(pd.length){ const ptot=pd.reduce((s,x)=>s+(x.o.value||0),0), ptodo=pd.filter(x=>x.stage!=="wait"&&!x.sent).length;
+      h+='<button class="btn'+(ptodo?' primary':'')+'" data-act="pay-due" style="width:100%;justify-content:space-between"><span>💰 سداد مستحق · '+pd.length+(ptodo?' · '+ptodo+' تحتاج تذكيراً':'')+'</span><span><bdi>'+ptot.toLocaleString("en-US")+'</bdi> ر.س</span></button>'; }
     const co=carryItems(day);
     if(co.length) h+='<section class="notice carry"><div><b>لديك '+plural(co.length,P_VISIT)+' مخططة لم تُنفَّذ في أيام سابقة</b><br>'+esc(co.slice(0,4).map(x=>cname(x.c)).join("، ")+(co.length>4?" وغيرهم":""))+'</div>'
       +'<div class="row grow"><button class="btn sm primary" data-act="carry-move">رحّلها لليوم</button><button class="btn sm" data-act="carry-drop">تجاهلها</button></div></section>';
@@ -2126,7 +2131,7 @@ function newPlaybook(){
   const add=(m,cid,d)=>{ const c=S.customers.get(cid); if(!c) return; const k=facKey(c); if(!m.has(k)) m.set(k,[]); m.get(k).push(d); };
   for(const v of S.visits){ if(v.state!=="done") continue; add(vis,v.customerId,v.date); (v.people||[]).forEach(p=>add(vis,p.id,v.date));
     const c=S.customers.get(v.customerId); if(c){ const k=facKey(c); if(!first.has(k)||v.date<first.get(k)) first.set(k,v.date); } }
-  S.messages.forEach(m=>{ if(m.kind!=="quoteDrop") add(msg,m.customerId,m.date); });
+  S.messages.forEach(m=>{ if(m.kind!=="quoteDrop"&&!/^pay/.test(m.kind)) add(msg,m.customerId,m.date); }); /* payment reminders are not sales contacts */
   for(const [k,F] of first){
     const fm=S.facM.get(k); if(!fm||diff(F,day)>90||diff(F,day)<0) continue;
     if(!fm.people.every(p=>(S.der.get(p.id)||{}).status==="new")) continue;
@@ -2333,6 +2338,18 @@ const WA = {
     "السلام عليكم {n}، {s} من بارتك. حبيت أتابع معك بعد حديثنا الأخير. تحب نجهز لك عرض سعر على اللي تحتاجه؟ {recap}",
     "هلا {n}، معك {s}. أرسل لي الأصناف اللي تهمك وأسعّرها لك اليوم، ونبدأ بتجربة بسيطة تعجبك.",
     "مساء الخير {n}، {s} من بارتك. وش القطع اللي تحتاجها هالفترة؟ أرسلها وأعطيك أفضل سعر."]},
+  payMid:{label:"تذكير سداد · منتصف المدة",why:"منتصف مهلة السداد (7 أيام): تذكير ودّي بلا إلحاح، يسهّل عليه الدفع قبل آخر موعد",t:[
+    "السلام عليكم {n}، معك {s} من بارتك. تذكير ودّي بخصوص سداد الطلبية ({item}){amtp}، ونقدّر لك إتمام السداد في أقرب وقت. وإذا تم السداد فشكراً لك وأعتذر عن الإزعاج.",
+    "هلا {n}، {s} من بارتك. أحببت أذكّرك بسداد الطلبية ({item}){amtp} خلال المهلة المتفق عليها. إذا تم السداد فجزاك الله خيراً، ولأي استفسار أنا حاضر.",
+    "مساء الخير {n}، معك {s} من بارتك. نذكّرك بلطف بسداد الطلبية ({item}){amtp}. شاكرين لك تعاملك معنا."]},
+  payEnd:{label:"تذكير سداد · نهاية المدة",why:"اليوم آخر يوم في مهلة السداد: رسالة واضحة ومهذبة تحدد المطلوب اليوم",t:[
+    "السلام عليكم {n}، معك {s} من بارتك. اليوم هو آخر موعد لسداد الطلبية ({item}){amtp}. نرجو إتمام السداد اليوم، ولأي استفسار أنا حاضر. وإذا تم السداد فشكراً لك.",
+    "هلا {n}، {s} من بارتك. تنتهي اليوم مهلة سداد الطلبية ({item}){amtp}، نرجو التكرّم بإتمام السداد اليوم. شاكرين لك تعاونك.",
+    "مساء الخير {n}، معك {s} من بارتك. نذكّرك بأن اليوم آخر موعد لسداد الطلبية ({item}){amtp}. نقدّر لك سرعة السداد."]},
+  payLate:{label:"متابعة سداد متأخر",why:"انتهت مهلة السداد: اطلب السداد أو موعداً محدداً له، بلغة مهذبة وحازمة",t:[
+    "السلام عليكم {n}، معك {s} من بارتك. انتهت مدة سداد الطلبية ({item}){amtp}. نرجو التكرّم بإتمام السداد في أقرب وقت، أو إفادتي بموعد السداد المتوقع.",
+    "هلا {n}، {s} من بارتك. نتابع معك سداد الطلبية ({item}){amtp} التي تجاوزت مهلة السداد. أرجو إفادتي بموعد السداد لنرتّب الأمر.",
+    "مساء الخير {n}، معك {s} من بارتك. بخصوص الطلبية ({item}){amtp}: مرّت مدة السداد، فنرجو إتمام السداد أو تحديد موعد قريب له. شاكرين تفهمك."]},
   hello:{label:"رسالة عامة",why:"رسالة ودّية عامة",t:[
     "السلام عليكم {n}، معك {s} من بارتك. كيف أقدر أخدمك اليوم؟",
     "هلا {n}، {s} من بارتك. إذا تحتاج أي قطع أرسل لي وأسعّرها لك فوراً."]}
@@ -2349,12 +2366,12 @@ function hash(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>
 function lastDoneVisit(cid){ let b=null; for(const v of S.visits) if(v.state==="done"&&v.customerId===cid&&(!b||v.date>b.date)) b=v; return b; }
 /* only customer-safe facts from the last visit (never the internal notes): the date we promised to get back to him */
 function waRecap(c){ const v=lastDoneVisit(c.id), nd=v&&v.next&&v.next.date?v.next.date:""; return nd&&nd>todayStr()?"وبإذن الله أتواصل معك "+dShort(nd)+". ":""; }
-function waText(c,kind,item,seed){
+function waText(c,kind,item,seed,amt){
   const k=WA[kind]||WA.hello, i=(hash(c.id+todayStr()+kind)+(seed||0))%k.t.length, lo=(S.der.get(c.id)||{}).lastOrder;
   return k.t[i].split("{n}").join(addrName(c)).split("{s}").join((S.me&&S.me.name)||"مندوب المبيعات").split(" ({item})").join(item?" ("+item+")":"").split("{item}").join(item||"")
-    .split("{recap}").join(waRecap(c)).split("{d}").join(lo?String(Math.max(0,diff(lo,todayStr()))):"").replace(/\s+$/,"");
+    .split("{amtp}").join(amt?" بمبلغ "+amt+" ريال":"").split("{recap}").join(waRecap(c)).split("{d}").join(lo?String(Math.max(0,diff(lo,todayStr()))):"").replace(/\s+$/,"");
 }
-function lastMsg(cid){ return S.messages.filter(m=>m.customerId===cid&&m.kind!=="quoteDrop").map(m=>m.date).sort().pop()||null; }
+function lastMsg(cid){ return S.messages.filter(m=>m.customerId===cid&&m.kind!=="quoteDrop"&&!/^pay/.test(m.kind)).map(m=>m.date).sort().pop()||null; }
 /* when is a message better than a visit? Tier A and cooling B accounts always get the visit. */
 /* quote follow-up ladder, timed from the INTERNAL approval of the quote at the operations app (approvedAt):
    +1h message, +5h call, next day 07:00 message, day 3 07:00 message, day 7 07:00 FINAL message (nothing after day 7).
@@ -2451,17 +2468,18 @@ function waSuggestions(day,max){
   return [...best.values()].sort((a,b)=>b.s.u-a.s.u).slice(0,max||4);
 }
 /* messages tab: suggestions, message anyone, recently sent */
-const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد التسليم",quote:"متابعة تسعيرة",quoteAppr:"تأكيد تسعيرة معتمدة",quoteLast:"متابعة أخيرة للتسعيرة",qcall:"اتصال بخصوص تسعيرة",newbie:"عميل جديد",cold:"عميل بعيد",hello:"رسالة عامة",checkin:"متابعة دورية",call:"اتصال",welcomeNew:"ترحيب بعميل جديد",missedNew:"مررنا ولم نلتقِ",softNew:"شكر دون إلحاح",afterVisit:"بعد الزيارة",thanksOrder:"شكر على الطلبية",interestFollow:"متابعة اهتمام"};
-function openWa(cid,kind,qid){
+const MSG_KIND={reorder:"تذكير إعادة طلب",delivered:"بعد التسليم",quote:"متابعة تسعيرة",quoteAppr:"تأكيد تسعيرة معتمدة",quoteLast:"متابعة أخيرة للتسعيرة",qcall:"اتصال بخصوص تسعيرة",newbie:"عميل جديد",cold:"عميل بعيد",hello:"رسالة عامة",checkin:"متابعة دورية",call:"اتصال",welcomeNew:"ترحيب بعميل جديد",missedNew:"مررنا ولم نلتقِ",softNew:"شكر دون إلحاح",afterVisit:"بعد الزيارة",thanksOrder:"شكر على الطلبية",interestFollow:"متابعة اهتمام",payMid:"تذكير سداد · منتصف المدة",payEnd:"تذكير سداد · نهاية المدة",payLate:"متابعة سداد متأخر",paycall:"اتصال بخصوص السداد"};
+function openWa(cid,kind,qid,oid){
   const c=S.customers.get(cid); if(!c) return;
   if(!phoneOk(normPhone(c.phone))){ toast("أضف رقم جوال صحيحاً لهذا العميل أولاً"); return; }
-  const s=kind?{kind,item:(()=>{ const qq=(qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||{}; return qq.orderNo||qq.item||""; })(),q:(qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||null}:(waSituation(c)||{kind:"hello"});
+  const po=kind&&/^pay/.test(kind)&&oid?S.orders.find(x=>x.id===oid):null; /* payment reminder: the order and its amount go into the message */
+  const s=po?{kind,item:po.orderNo||"",amt:po.value>0?po.value.toLocaleString("en-US"):"",q:null,o:po}:kind?{kind,item:(()=>{ const qq=(qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||{}; return qq.orderNo||qq.item||""; })(),q:(qid&&S.quotes.find(q=>q.id===qid))||S.quotes.filter(q=>q.customerId===cid&&liveQuote(q)).sort((a,b)=>a.date<b.date?1:-1)[0]||null}:(waSituation(c)||{kind:"hello"});
   let seed=0, logged=false;
-  const text=()=>waText(c,s.kind,s.item,seed), lm=lastMsg(cid);
+  const text=()=>waText(c,s.kind,s.item,seed,s.amt), lm=lastMsg(cid);
   const href=t=>waLink(c.phone)+"?text="+encodeURIComponent(t);
   openSheet({
     title:"رسالة لـ"+esc(cname(c)), sub:esc(WA[s.kind].label)+(lm?" · آخر رسالة "+esc(ago(lm)):""),
-    body:(s.q?'<div class="v-note"><span class="k">التسعيرة</span><bdi><b>'+esc(s.q.orderNo||s.q.item)+'</b></bdi><br><span class="v-sub">'+(s.q.value>0?'<bdi>'+s.q.value.toLocaleString("en-US")+'</bdi> ر.س':'')+'</span></div>':'')+'<div class="field"><label for="wa-t">نص الرسالة (يمكنك تعديله)</label><textarea id="wa-t" class="input" style="min-height:150px"></textarea></div><div class="v-sub">'+esc(WA[s.kind].why)+'</div>',
+    body:(s.o?'<div class="v-note"><span class="k">الطلبية</span><bdi><b>'+esc(s.o.orderNo||"بدون رقم")+'</b></bdi> · '+esc(dShort(s.o.date))+'<br><span class="v-sub">'+(s.o.value>0?'<bdi>'+s.o.value.toLocaleString("en-US")+'</bdi> ر.س':'المبلغ غير محدد')+'</span></div>':'')+(s.q?'<div class="v-note"><span class="k">التسعيرة</span><bdi><b>'+esc(s.q.orderNo||s.q.item)+'</b></bdi><br><span class="v-sub">'+(s.q.value>0?'<bdi>'+s.q.value.toLocaleString("en-US")+'</bdi> ر.س':'')+'</span></div>':'')+'<div class="field"><label for="wa-t">نص الرسالة (يمكنك تعديله)</label><textarea id="wa-t" class="input" style="min-height:150px"></textarea></div><div class="v-sub">'+esc(WA[s.kind].why)+'</div>',
     foot:'<a class="btn primary" id="wa-go" target="_blank" rel="noopener">افتح واتساب وأرسل</a><button class="btn" id="wa-alt">صياغة أخرى</button><button class="btn" id="wa-copy">نسخ</button>',
     mount(){
       const t=$("#wa-t"), go=$("#wa-go"); const set=()=>{ t.value=text(); go.href=href(t.value); };
@@ -2476,6 +2494,48 @@ function openWa(cid,kind,qid){
         toast("سُجّلت الرسالة. أكمل الإرسال من واتساب");
       });
     }
+  });
+}
+
+/* payment follow-up: an order is unpaid when the operations sync says so; the customer has 7 days from the order date.
+   Day 4 = mid-term reminder, day 7 = last day, after that = late. Each reminder is a ready WhatsApp message, one tap to send. */
+const PAY_DAYS=7, PAY_MID=4;
+const PAY_LAB={wait:"قيد المهلة",mid:"تذكير منتصف المدة",end:"آخر يوم للسداد",late:"متأخرة"};
+function payDue(){
+  const t=todayStr(), out=[], rank={end:0,late:1,mid:2,wait:3}; /* last day first, then late (most recently late first), then mid-term, then still within the term */
+  for(const o of S.orders){
+    if(!S.pay||S.pay.get(o.id)!==false) continue;
+    const c=S.customers.get(o.customerId); if(!c) continue;
+    const age=diff(o.date,t); if(age<0) continue;
+    const stage=age>PAY_DAYS?"late":age===PAY_DAYS?"end":age>=PAY_MID?"mid":"wait";
+    const kind=stage==="late"?"payLate":stage==="end"?"payEnd":"payMid";
+    const mine=m=>m.customerId===c.id&&m.kind===kind&&(!o.orderNo||(m.body||"").includes(o.orderNo));
+    /* mid-term and last-day reminders are sent once per order; a late one may repeat, but not twice in a day */
+    const sent=stage==="late"?S.messages.some(m=>mine(m)&&m.date===t):stage==="wait"?false:S.messages.some(m=>mine(m)&&m.date>=o.date);
+    out.push({o,c,age,stage,kind,sent});
+  }
+  return out.sort((a,b)=>rank[a.stage]-rank[b.stage]||(a.stage==="late"?a.age-b.age:b.age-a.age)); /* every unpaid order past 7 days stays listed as late, however old */
+}
+function openPayDue(){
+  const list=payDue(), money=n=>n>0?'<bdi>'+n.toLocaleString("en-US")+'</bdi> ر.س':'المبلغ غير محدد';
+  const total=list.reduce((s,x)=>s+(x.o.value||0),0), todo=list.filter(x=>x.stage!=="wait"&&!x.sent).length;
+  const card=x=>{
+    const ph=normPhone(x.c.phone), ok=phoneOk(ph), fac=facOf(x.c).name||"";
+    const lab=x.stage==="late"?"متأخرة "+plural(x.age-PAY_DAYS,P_DAY):PAY_LAB[x.stage];
+    const col=x.stage==="late"||x.stage==="end"?"background:var(--bad-soft);color:var(--bad)":x.stage==="mid"?"background:var(--orange-soft,#fff4e5);color:var(--orange,#b25e00)":"";
+    return '<article class="visit"><div class="v-top"><div style="min-width:0"><div class="v-name">'+esc(cname(x.c))+'</div>'
+      +'<div class="v-sub">'+esc([fac,x.o.orderNo?"طلبية "+x.o.orderNo:"",dShort(x.o.date)].filter(Boolean).join(" · "))+'</div></div>'
+      +'<div class="v-time" style="font-weight:700">'+money(x.o.value)+'</div></div>'
+      +'<div class="v-meta"><span class="chip" style="'+col+'">'+esc(lab)+'</span><span>'+(x.stage==="late"?"مرّ "+plural(x.age,P_DAY)+" على الطلبية":"اليوم "+x.age+" من "+PAY_DAYS)+'</span>'+(x.sent?'<span class="chip muted">أُرسل التذكير</span>':'')+'</div>'
+      +'<div class="v-actions">'+(ok?'<a class="btn sm" data-act="call-log" data-id="'+esc(x.c.id)+'" data-kind="paycall" href="tel:'+esc(ph)+'">اتصال</a>'
+        +'<button class="btn sm'+(x.stage!=="wait"&&!x.sent?" primary":"")+'" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'" data-oid="'+esc(x.o.id)+'">'+(x.stage==="wait"?"واتساب":x.sent?"إعادة التذكير":"أرسل التذكير")+'</button>':'<span class="v-sub">أضف رقم جوال العميل أولاً</span>')+'</div></article>';
+  };
+  openSheet({
+    title:"سداد مستحق",
+    sub:list.length?(list.length+" طلبية · "+total.toLocaleString("en-US")+" ر.س"+(todo?" · "+todo+" تحتاج تذكيراً":"")):"",
+    body:list.length?'<div class="list">'+list.map(card).join("")+'</div><div class="v-sub">مهلة السداد '+PAY_DAYS+' أيام من تاريخ الطلبية: تذكير في اليوم '+PAY_MID+' (منتصف المدة)، وآخر تذكير في اليوم '+PAY_DAYS+'. حالة السداد تأتي من تطبيق العمليات.</div>':'<div class="empty"><b>لا توجد طلبيات غير مسدّدة</b>كل الطلبيات المسجّلة مسدّدة.</div>',
+    foot:'<button class="btn" data-act="close-sheet">إغلاق</button>',
+    mount(){}
   });
 }
 
@@ -2537,7 +2597,7 @@ document.addEventListener("click",async e=>{
   if(a==="goto-recorded"){ S.dashOpen=true; setTab("dash"); setTimeout(()=>{ const el=$("#feed-sec"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); },80); return; }
   if(a==="goto-quotes"){ const el=$("#quotes-sec"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
   if(a==="call-log"){ /* the call link opens normally; the touch is logged once (repeat taps within 2 minutes are ignored) */
-    const ck=b.dataset.kind==="qcall"?"qcall":"call"; S._calling=S._calling||{};
+    const ck=b.dataset.kind==="qcall"?"qcall":b.dataset.kind==="paycall"?"paycall":"call"; S._calling=S._calling||{};
     if(S._calling[id]||S.messages.some(m=>m.customerId===id&&(m.kind==="qcall"||m.kind==="call")&&Date.now()-msgAt(m)<120000)) return;
     S._calling[id]=1; setTimeout(()=>{ delete S._calling[id]; },120000);
     guard(sb.from("messages").insert({id:uuid(),customer_id:id,kind:ck,channel:"call",body:"",date:todayStr(),created_by:S.email}).select().single()).then(r=>{ if(r&&r!==true){ putMsg(r); refresh(); } }); return; }
@@ -2551,7 +2611,8 @@ document.addEventListener("click",async e=>{
   if(a==="carry-drop"){ b.disabled=true; const ids=carryItems(S.day).map(x=>x.carryVisit.id); const up=await guard(sb.from("visits").update({state:"missed"}).in("id",ids).select(),"تم تجاهلها وسُجّلت كزيارات لم تتم"); if(up&&up.forEach){ up.forEach(putVisit); refresh(); } return; }
   if(a==="toggle-imp"){ const c=S.customers.get(id); if(!c) return; const r=await guard(sb.from("customers").update({important:!c.important}).eq("id",id).select().single(),c.important?"أُلغي التمييز":"مُيّز كعميل مهم"); if(r){ putCust(r); refresh(); openCustomer(id); } return; }
   if(a==="guide") return openGuide(id);
-  if(a==="wa") return openWa(id,b.dataset.kind||null,b.dataset.qid||null);
+  if(a==="wa") return openWa(id,b.dataset.kind||null,b.dataset.qid||null,b.dataset.oid||null);
+  if(a==="pay-due") return openPayDue();
   if(a==="new-quote") return openQuote(id||null);
   if(a==="quote-win") return openQuoteClose(id,true);
   if(a==="quote-lose") return openQuoteClose(id,false);
