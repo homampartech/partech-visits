@@ -2502,7 +2502,7 @@ function openWa(cid,kind,qid,oid){
 const PAY_DAYS=7, PAY_MID=4;
 const PAY_LAB={wait:"قيد المهلة",mid:"تذكير منتصف المدة",end:"آخر يوم للسداد",late:"متأخرة"};
 function payDue(){
-  const t=todayStr(), out=[], rank={end:0,late:1,mid:2,wait:3}; /* last day first, then late (most recently late first), then mid-term, then still within the term */
+  const t=todayStr(), out=[], rank={end:0,late:1,mid:2,wait:3,stale:4}; /* last day first, then recently late; very old unpaid orders (30+ days) go to the bottom */
   for(const o of S.orders){
     if(!S.pay||S.pay.get(o.id)!==false) continue;
     const c=S.customers.get(o.customerId); if(!c) continue;
@@ -2514,7 +2514,8 @@ function payDue(){
     const sent=stage==="late"?S.messages.some(m=>mine(m)&&m.date===t):stage==="wait"?false:S.messages.some(m=>mine(m)&&m.date>=o.date);
     out.push({o,c,age,stage,kind,sent});
   }
-  return out.sort((a,b)=>rank[a.stage]-rank[b.stage]||(a.stage==="late"?a.age-b.age:b.age-a.age)); /* every unpaid order past 7 days stays listed as late, however old */
+  const rk=x=>x.stage==="late"&&x.age>PAY_DAYS+30?rank.stale:rank[x.stage];
+  return out.sort((a,b)=>rk(a)-rk(b)||(a.stage==="late"?a.age-b.age:b.age-a.age));
 }
 function openPayDue(){
   const list=payDue(), money=n=>n>0?'<bdi>'+n.toLocaleString("en-US")+'</bdi> ر.س':'المبلغ غير محدد';
