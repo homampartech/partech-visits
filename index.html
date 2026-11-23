@@ -337,7 +337,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-23.4"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-23.5"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -941,8 +941,10 @@ async function loadAll(retried){
     ]);
     S.pay = new Map(((pay&&!pay.error?pay.data:[])||[]).map(r=>[r.order_id,{paid:r.fully_paid,status:r.status_label||"",total:r.paid_total==null?null:Number(r.paid_total),revenue:r.revenue==null?null:Number(r.revenue),suppliedAt:r.supplied_at||null}])); /* paid flag and operations status per order, synced from the operations app (the view exposes nothing else) */
     S.commission = new Map(((comm&&!comm.error?comm.data:[])||[]).map(r=>[r.month,r]));
-    S.messages=[]; ((msgs.error?[]:msgs.data)||[]).forEach(putMsg);
-    S.quotes = ((qts.error?[]:qts.data)||[]).map(rowToQuote).filter(q=>q.by==="ops-sync");
+    /* a failed fetch must never wipe what is already known: an empty message log would bring every already-messaged customer back onto the follow-up list */
+    const prevMsgs=S.messages||[]; S.messages=[]; if(msgs.error) prevMsgs.forEach(m=>S.messages.push(m)); else (msgs.data||[]).forEach(putMsg);
+    (S._sentLocal||[]).forEach(putMsg); /* messages logged on this device stay counted even if the refetch is stale */
+    if(!qts.error) S.quotes = (qts.data||[]).map(rowToQuote).filter(q=>q.by==="ops-sync");
     if(c.error) throw c.error; if(team.error) throw team.error;
     if(fac.error||ord.error) throw (fac.error||ord.error);
     S.facilities = new Map(fac.data.map(r=>[r.id,rowToFac(r)]));
@@ -2488,7 +2490,7 @@ function openWa(cid,kind,qid,oid){
       $("#wa-copy").addEventListener("click",async()=>{ try{ await navigator.clipboard.writeText(t.value); toast("نُسخت الرسالة"); }catch(e){ toast("تعذّر النسخ"); } });
       go.addEventListener("click",()=>{
         if(logged) return; logged=true;
-        guard(sb.from("messages").insert({id:uuid(),customer_id:cid,kind:s.kind,body:t.value,date:todayStr(),created_by:S.email}).select().single()).then(r=>{ if(r&&r!==true){ putMsg(r); refresh(); } });
+        guard(sb.from("messages").insert({id:uuid(),customer_id:cid,kind:s.kind,body:t.value,date:todayStr(),created_by:S.email}).select().single()).then(r=>{ if(r&&r!==true){ putMsg(r); (S._sentLocal=S._sentLocal||[]).push(r); refresh(); } });
         /* the message counts as the follow-up: a planned visit that was not necessary leaves today's plan */
         const pv=visitFor(cid,todayStr()); if(pv&&pv.state==="planned"&&msgOnly(c,todayStr())) removeVisit(pv.id);
         toast("سُجّلت الرسالة. أكمل الإرسال من واتساب");
