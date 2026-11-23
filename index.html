@@ -337,7 +337,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-23.2"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-23.3"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -939,7 +939,7 @@ async function loadAll(retried){
       sb.from("commission").select("*"),
       sb.from("order_payment").select("*")
     ]);
-    S.pay = new Map(((pay&&!pay.error?pay.data:[])||[]).map(r=>[r.order_id,r.fully_paid])); /* paid / unpaid per order, synced from the operations app (the view exposes nothing else) */
+    S.pay = new Map(((pay&&!pay.error?pay.data:[])||[]).map(r=>[r.order_id,{paid:r.fully_paid,status:r.status_label||""}])); /* paid flag and operations status per order, synced from the operations app (the view exposes nothing else) */
     S.commission = new Map(((comm&&!comm.error?comm.data:[])||[]).map(r=>[r.month,r]));
     S.messages=[]; ((msgs.error?[]:msgs.data)||[]).forEach(putMsg);
     S.quotes = ((qts.error?[]:qts.data)||[]).map(rowToQuote).filter(q=>q.by==="ops-sync");
@@ -2499,12 +2499,12 @@ function openWa(cid,kind,qid,oid){
 
 /* payment follow-up: an order is unpaid when the operations sync says so; the customer has 7 days from the order date.
    Day 4 = mid-term reminder, day 7 = last day, after that = late. Each reminder is a ready WhatsApp message, one tap to send. */
-const PAY_DAYS=7, PAY_MID=4;
+const PAY_DAYS=7, PAY_MID=4, PAY_STATUS="تم توريدها";
 const PAY_LAB={wait:"قيد المهلة",mid:"تذكير منتصف المدة",end:"آخر يوم للسداد",late:"متأخرة"};
 function payDue(){
-  const t=todayStr(), out=[], rank={end:0,late:1,mid:2,wait:3,stale:4}; /* last day first, then recently late; very old unpaid orders (30+ days) go to the bottom */
+  const t=todayStr(), out=[], rank={end:0,late:1,mid:2,wait:3}; /* last day first, then late (most recently late first), then mid-term, then still within the term */
   for(const o of S.orders){
-    if(!S.pay||S.pay.get(o.id)!==false) continue;
+    const pp=S.pay&&S.pay.get(o.id); if(!pp||pp.paid!==false||pp.status!==PAY_STATUS) continue; /* payment is due only for orders already supplied at the operations app ("تم توريدها") and not paid in full */
     const c=S.customers.get(o.customerId); if(!c) continue;
     const age=diff(o.date,t); if(age<0) continue;
     const stage=age>PAY_DAYS?"late":age===PAY_DAYS?"end":age>=PAY_MID?"mid":"wait";
@@ -2514,8 +2514,7 @@ function payDue(){
     const sent=stage==="late"?S.messages.some(m=>mine(m)&&m.date===t):stage==="wait"?false:S.messages.some(m=>mine(m)&&m.date>=o.date);
     out.push({o,c,age,stage,kind,sent});
   }
-  const rk=x=>x.stage==="late"&&x.age>PAY_DAYS+30?rank.stale:rank[x.stage];
-  return out.sort((a,b)=>rk(a)-rk(b)||(a.stage==="late"?a.age-b.age:b.age-a.age));
+  return out.sort((a,b)=>rank[a.stage]-rank[b.stage]||(a.stage==="late"?a.age-b.age:b.age-a.age)); /* every unpaid order past 7 days stays listed as late, however old */
 }
 function openPayDue(){
   const list=payDue(), money=n=>n>0?'<bdi>'+n.toLocaleString("en-US")+'</bdi> ر.س':'المبلغ غير محدد';
@@ -2534,7 +2533,7 @@ function openPayDue(){
   openSheet({
     title:"سداد مستحق",
     sub:list.length?(list.length+" طلبية · "+total.toLocaleString("en-US")+" ر.س"+(todo?" · "+todo+" تحتاج تذكيراً":"")):"",
-    body:list.length?'<div class="list">'+list.map(card).join("")+'</div><div class="v-sub">مهلة السداد '+PAY_DAYS+' أيام من تاريخ الطلبية: تذكير في اليوم '+PAY_MID+' (منتصف المدة)، وآخر تذكير في اليوم '+PAY_DAYS+'. حالة السداد تأتي من تطبيق العمليات.</div>':'<div class="empty"><b>لا توجد طلبيات غير مسدّدة</b>كل الطلبيات المسجّلة مسدّدة.</div>',
+    body:list.length?'<div class="list">'+list.map(card).join("")+'</div><div class="v-sub">مهلة السداد '+PAY_DAYS+' أيام من تاريخ الطلبية: تذكير في اليوم '+PAY_MID+' (منتصف المدة)، وآخر تذكير في اليوم '+PAY_DAYS+'. تظهر الطلبيات التي «تم توريدها» وغير مسدّدة بالكامل فقط. المبلغ هو قيمة الطلبية، وقد يكون جزء منه مسدّداً (حالة السداد من تطبيق العمليات).</div>':'<div class="empty"><b>لا توجد طلبيات غير مسدّدة</b>كل الطلبيات المسجّلة مسدّدة.</div>',
     foot:'<button class="btn" data-act="close-sheet">إغلاق</button>',
     mount(){}
   });
