@@ -337,7 +337,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-20.15"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-23.1"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -1054,7 +1054,8 @@ function todayHTML(){
     const must=new Set(day===t?dailyPriorities(day).map(x=>x.c.id).concat(newPlaybook().filter(o=>o.touch[1]==="visit"&&o.late>=0).map(o=>o.c.id)):[]);
     const p=list.filter(v=>v.state==="planned"), d=list.filter(v=>v.state!=="planned");
     if(p.length) h+='<h2 class="sec">زيارات بانتظار التنفيذ <small>'+p.length+'</small></h2><div class="list">'+p.map(v=>{ const c=S.customers.get(v.customerId), why=day===t?mustReason(c,day):""; return visitCard(v,{must:!!why||must.has(v.customerId),reason:why?why+(c&&messagedToday(c)?" · راسلته اليوم لكن الزيارة ما زالت ضرورية":""):""}); }).join("")+'</div>';
-    if(d.length) h+='<h2 class="sec">تم تسجيلها <small>'+d.length+'</small></h2><div class="list">'+d.map(v=>visitCard(v)).join("")+'</div>';
+    /* recorded visits live in the follow-up tab: the home page keeps only what is left to do, plus one line of progress */
+    if(d.length) h+='<button class="btn" data-act="goto-recorded" style="width:100%;justify-content:space-between">'+'<span>✓ سُجّل '+plural(d.length,P_VISIT)+(day===t?" اليوم":"")+'</span><span>عرضها في المتابعة ←</span></button>';
   }
   /* 2) follow-ups that need no visit: messages and calls */
   if(day===t && !isFri) h+=followHTML(day);
@@ -1314,7 +1315,7 @@ function dashFullHTML(){
    +'<div class="tile"><b>'+cur.length+'</b><span>حالي</span></div><div class="tile"><b>'+lap.length+'</b><span>سابق (آخر طلبية قبل '+cfg.lapsedDays+' يوماً أو أكثر)</span></div>'
    +'<div class="tile"><b>'+nw.length+'</b><span>جديد</span></div><div class="tile"><b>'+nw.filter(c=>S.der.get(c.id).count>0).length+'</b><span>جدد بدأوا الطلب</span></div></div></section>';
   const feed=S.visits.filter(v=>v.state!=="planned").sort((a,b)=>((b.doneAt||b.date)>(a.doneAt||a.date)?1:-1)).slice(0,20);
-  h+='<section class="card"><h3>آخر النشاط <small>'+(S.isOwner?"أضف توجيهاً على أي زيارة":"توجيهات المدير تظهر على زياراتك")+'</small></h3>'
+  h+='<section class="card" id="feed-sec"><h3>آخر النشاط <small>'+(S.isOwner?"أضف توجيهاً على أي زيارة":"توجيهات المدير تظهر على زياراتك")+'</small></h3>'
    +(feed.length?'<div class="feed">'+feed.map(v=>visitCard(v,{showDate:true,showBy:true})).join("")+'</div>':'<div class="empty"><b>لا يوجد نشاط بعد</b>تظهر هنا كل زيارة يتم تسجيلها، لحظة بلحظة.</div>')
    +'</section>';
   if(S.isOwner) h+='<button class="btn" data-act="settings">'+ICON.gear.replace("<svg",'<svg width="18" height="18"')+'أهداف الخطة</button>';
@@ -1573,36 +1574,71 @@ function openSuggest(){
 
 /* result sheet: adaptive to the customer's stage, with mandatory fields that cannot be skipped */
 function num(s){ const n=Number(String(s||"").replace(/[٠-٩]/g,x=>"٠١٢٣٤٥٦٧٨٩".indexOf(x)).replace(/[,\s٬]/g,"")); return isFinite(n)?n:0; }
+/* result sheet v2: the result is the only required answer. The app fills the rest (channel, goal, goal-met, next step) and the coach suggests them. */
+function nextWorking(d){ let x=d; for(let i=0;i<7&&dow(x)===5;i++) x=addDays(x,1); return x; }
+function nowHM2(){ const d=new Date(); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+/* the channel is known from what the salesman did: a call logged for this customer that day means a call, otherwise a field visit */
+function inferChannel(v){
+  if(v.channel) return v.channel;
+  return S.messages.some(m=>m.customerId===v.customerId&&m.date===v.date&&(m.kind==="call"||m.kind==="qcall"))?"call":"visit";
+}
+/* goal met is read from the result and from real orders synced from the operations app within 3 days */
+function inferGoalMet(v,res){
+  if(res==="absent") return "";
+  if(res==="order"||S.events.some(e=>e.cid===v.customerId&&e.date>=v.date&&e.date<=addDays(v.date,3))) return "yes";
+  return res==="interested"?"part":"no";
+}
+/* the coach proposes the next step from the result, the customer's stage and his ordering rhythm */
+function suggestNext(v,res,sk){
+  const base=v.date>todayStr()?v.date:todayStr(), c=S.customers.get(v.customerId)||{}, fm=fmOf(c), gap=fm&&fm.gap?fm.gap:null;
+  let t="", n=3;
+  if(res==="absent"){ t="إعادة الزيارة: لم يتواجد"; n=1; }
+  else if(res==="notnow"){ t="معاودة التواصل لمعرفة إن تغيّر احتياجه"; n=14; }
+  else if(res==="order"){ t="تأكيد رضاه عن الطلبية وطلب التالية"; n=gap?Math.min(Math.max(gap,5),14):7; }
+  else if(sk==="new0"){ t="متابعة اهتمامه وعرض طلبية تجربة صغيرة"; n=3; }
+  else if(sk==="new1"){ t="طلب الطلبية الثانية"; n=4; }
+  else if(sk==="new2"){ t="طلب الطلبية الثالثة لتثبيته عميلاً حالياً"; n=4; }
+  else if(sk==="lapsed"){ t="متابعة عرض الطلبية التجريبية"; n=4; }
+  else { t="طلبية هذا الأسبوع"; n=gap?Math.min(Math.max(Math.round(gap/2),3),7):5; }
+  return {text:t,date:nextWorking(addDays(base,n))};
+}
+/* the achievements list follows the result: a refusal asks about the reason, an interested customer about the offer */
+function checkRelevant(key,res){
+  if(key==="next"||!res||res==="absent") return false;
+  if(res==="notnow") return ["why","fix","need","sat","dm","intro"].includes(key);
+  return true;
+}
 function openResult(id, opt){
   const v=S.visitById.get(id); if(!v){ toast("الزيارة غير موجودة"); return; }
   const c=S.customers.get(v.customerId)||{};
-  const stg=STAGES[stageOf(v.customerId)];
+  const sk=stageOf(v.customerId), stg=STAGES[sk];
   const others=(S.facPeople.get(facKey(c))||[]).filter(x=>x.id!==c.id);
   const prevP=new Map((v.people||[]).map(p=>[p.id,p]));
-  const myOrder=S.orders.find(o=>o.visitId===v.id&&o.customerId===v.customerId);
   const r=(name,val,label,checked)=>'<input type="radio" name="'+name+'" id="'+name+'-'+val+'" value="'+val+'"'+(checked?" checked":"")+'><label for="'+name+'-'+val+'">'+label+'</label>';
-  const ch=v.channel||"visit";
-  const goals=stg.goals.concat(v.goal&&!stg.goals.includes(v.goal)?[v.goal]:[]);
-  const curGoal=v.goal||stg.goals[0];
+  const goal=v.goal||stg.goals[0];
+  const hasNext=!!(v.state==="done"&&v.next&&v.next.text);
   let body='';
-  body+='<div class="field"><span class="lab">طريقة التواصل</span><div class="seg">'+r("rs-ch","visit","زيارة ميدانية",ch==="visit")+r("rs-ch","call","اتصال",ch==="call")+'</div></div>';
   body+='<div class="field" id="f-res"><span class="lab">النتيجة</span><div class="seg">'+Object.keys(RESULT).filter(k=>k!=="order"||v.result==="order").map(k=>r("rs-res",k,RESULT[k],v.result===k)).join("")+'</div></div>';
-  body+='<div class="field" id="rs-reasonbox" hidden><label for="rs-reason">سبب عدم الاهتمام</label><select id="rs-reason" class="input"><option value="">اختر السبب</option>'+REASONS.map(x=>'<option'+(v.reason===x?" selected":"")+'>'+x+'</option>').join("")+'</select></div>';
-  body+='<div class="field" id="rs-goalbox"><label for="rs-goal">هدف الزيارة</label><select id="rs-goal" class="input">'+goals.map(g=>'<option'+(g===curGoal?" selected":"")+'>'+esc(g)+'</option>').join("")+'</select>'
-    +'<span class="lab" style="margin-top:4px">هل تحقق الهدف؟</span><div class="seg" id="f-gm" style="grid-template-columns:repeat(3,1fr)">'+Object.keys(GOAL_MET).map(k=>r("rs-gm",k,GOAL_MET[k],v.goalMet===k)).join("")+'</div></div>';
+  body+='<div class="field" id="rs-smart" hidden>'
+    +'<div class="v-note"><span class="k">الهدف</span>'+esc(goal)+'</div>'
+    +'<div class="v-note"><span class="k">الخطوة القادمة · يقترحها التطبيق</span><span id="rs-nextline"></span></div>'
+    +'<button type="button" class="btn sm ghost" id="rs-nextedit">تغيير الخطوة أو الموعد</button>'
+    +'<div id="rs-nextbox" class="field" hidden><input id="rs-next" class="input" value="'+esc(v.next&&v.next.text||"")+'" aria-label="الخطوة القادمة">'
+    +'<input id="rs-nextd" class="input" type="date" value="'+esc(v.next&&v.next.date||"")+'" aria-label="تاريخ الخطوة القادمة" min="'+esc(addDays(v.date,1))+'">'
+    +'<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="rs-auto" checked style="width:18px;height:18px;accent-color:var(--accent)">أضفها تلقائياً إلى خطة ذلك اليوم</label></div></div>';
+  body+='<div class="field" id="rs-reasonbox" hidden><label for="rs-reason">سبب عدم الاهتمام (اختياري)</label><select id="rs-reason" class="input"><option value="">اختر السبب</option>'+REASONS.map(x=>'<option'+(v.reason===x?" selected":"")+'>'+x+'</option>').join("")+'</select></div>';
+  body+='<div class="field"><label for="rs-notes">ملاحظة سريعة (اختياري)</label><textarea id="rs-notes" class="input" rows="2" placeholder="ماذا يحتاج العميل؟ ماذا قال؟ ماذا اتفقنا؟">'+esc(v.notes||"")+'</textarea></div>';
+  body+='<details class="rs-more"'+(v.state==="done"?" open":"")+'><summary style="cursor:pointer;font-weight:600;padding:8px 0">تفاصيل إضافية (اختياري)</summary>';
+  body+='<div class="field" id="rs-checkbox"><span class="lab">ما أنجزته في الزيارة · <span id="rs-score">0</span></span><div class="checks">'+stg.checks.filter(k=>k[0]!=="next").map(k=>'<label data-ck="'+k[0]+'"><input type="checkbox" id="rs-ck-'+k[0]+'"'+(v.checks&&v.checks[k[0]]?" checked":"")+'>'+k[1]+'</label>').join("")+'</div></div>';
   if(others.length){
     body+='<div class="field" id="rs-peoplebox"><span class="lab">هل قابلت أشخاصاً آخرين من نفس المنشأة؟</span><div class="people-pick">'+others.map((o,i)=>{
-      const p=prevP.get(o.id), on=!!p, po=S.orders.find(x=>x.visitId===v.id&&x.customerId===o.id);
+      const p=prevP.get(o.id), on=!!p;
       return '<div class="pp"><label class="pph"><input type="checkbox" id="pp-on-'+i+'"'+(on?" checked":"")+'><span>'+esc(cname(o))+(o.title?' · '+esc(o.title):'')+'</span></label>'
         +'<div id="pp-box-'+i+'"'+(on?'':' hidden')+' style="display:flex;flex-direction:column;gap:6px"><select id="pp-res-'+i+'" class="input">'+["interested","notnow"].map(k=>'<option value="'+k+'"'+((p&&p.result)===k?" selected":"")+'>'+RESULT[k]+'</option>').join("")+'</select></div></div>';
     }).join("")+'</div><span class="help">نتيجة كل شخص تُسجَّل على حدة، والزيارة تبقى واحدة.</span></div>';
   }
-  body+='<div class="field"><label for="rs-notes">ملاحظات الزيارة</label><textarea id="rs-notes" class="input" placeholder="ماذا يحتاج العميل؟ ماذا قال؟ ماذا اتفقنا؟">'+esc(v.notes||"")+'</textarea><span class="help">25 حرفاً على الأقل. هذه الملاحظة تظهر لك قبل زيارتك القادمة لنفس العميل.</span></div>';
-  body+='<div class="field"><label for="rs-next">الخطوة القادمة</label><input id="rs-next" class="input" value="'+esc(v.next&&v.next.text||"")+'" placeholder="مثال: أمرّ عليه لتأكيد التسليم وأعرض الفلاتر">'
-    +'<input id="rs-nextd" class="input" type="date" value="'+esc(v.next&&v.next.date||"")+'" aria-label="تاريخ الخطوة القادمة" min="'+esc(addDays(v.date,1))+'">'
-    +'<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="rs-auto" checked style="width:18px;height:18px;accent-color:var(--accent)">أضفها تلقائياً إلى خطة ذلك اليوم</label></div>';
-  body+='<div class="field" id="rs-checkbox"><span class="lab">ما أنجزته في الزيارة · '+esc(stg.label)+' · <span id="rs-score">0</span>/'+stg.checks.length+'</span><div class="checks">'+stg.checks.map(k=>'<label><input type="checkbox" id="rs-ck-'+k[0]+'"'+(v.checks&&v.checks[k[0]]?" checked":"")+'>'+k[1]+'</label>').join("")+'</div></div>';
   body+='<div class="field"><label for="rs-time">الوقت</label><input id="rs-time" class="input" type="time" value="'+esc(v.time||"")+'"></div>';
+  body+='</details>';
   body+='<div class="err" id="rs-err" hidden></div>';
   let foot='<button class="btn primary" id="rs-save">حفظ النتيجة</button>';
   if(v.state!=="done") foot+='<button class="btn" id="rs-missed">لم تتم الزيارة</button><button class="btn danger" id="rs-del">'+(opt&&opt.fresh?"إلغاء":"إزالة من الخطة")+'</button>';
@@ -1611,14 +1647,24 @@ function openResult(id, opt){
     sub: esc([facOf(c).name, dLong(v.date)].filter(Boolean).join(" · ")) + ' ' + chipFor(v.customerId),
     body, foot,
     mount(root){
+      let dirty=false; /* a saved next step is kept only while the result is unchanged and the salesman has not edited it */
+      const nt=$("#rs-next"), nd=$("#rs-nextd"), auto=$("#rs-auto");
       const sync=()=>{
         const res=(root.querySelector('input[name="rs-res"]:checked')||{}).value||"";
+        $("#rs-smart").hidden=!res;
         $("#rs-reasonbox").hidden=res!=="notnow";
-        $("#rs-goalbox").hidden=res==="absent"; $("#rs-checkbox").hidden=res==="absent";
-        $("#rs-score").textContent=stg.checks.filter(k=>$("#rs-ck-"+k[0]).checked).length;
+        if(res&&!dirty&&!(hasNext&&res===v.result)){ const s=suggestNext(v,res,sk); nt.value=s.text; nd.value=s.date; auto.checked=diff(todayStr(),s.date)<=7; }
+        $("#rs-nextline").textContent=(nt.value||"—")+(nd.value?" · "+dShort(nd.value):"");
+        let shown=0, done=0;
+        root.querySelectorAll("#rs-checkbox label[data-ck]").forEach(l=>{ const ok=checkRelevant(l.dataset.ck,res); l.hidden=!ok; if(ok){ shown++; if(l.querySelector("input").checked) done++; } });
+        $("#rs-checkbox").hidden=!shown;
+        $("#rs-score").textContent=done+"/"+shown;
         others.forEach((o,i)=>{ const on=$("#pp-on-"+i).checked; $("#pp-box-"+i).hidden=!on; });
       };
-      root.addEventListener("change",sync); sync();
+      nt.addEventListener("input",()=>{ dirty=true; });
+      nd.addEventListener("change",()=>{ dirty=true; });
+      $("#rs-nextedit").addEventListener("click",()=>{ $("#rs-nextbox").hidden=!$("#rs-nextbox").hidden; });
+      root.addEventListener("change",sync); root.addEventListener("input",e=>{ if(e.target===nt) sync(); }); sync();
       $("#rs-save").addEventListener("click",()=>saveResult(v,stg,others));
       const m=$("#rs-missed"); if(m) m.addEventListener("click",async()=>{ if(await updateVisit(v.id,{state:"missed",time:$("#rs-time").value},"سُجّلت كزيارة لم تتم")) closeSheet(); });
       const d=$("#rs-del"); if(d) d.addEventListener("click",async()=>{ if(await removeVisit(v.id)) closeSheet(); });
@@ -1630,20 +1676,13 @@ async function saveResult(v,stg,others){
   document.querySelectorAll("#sh-body .bad").forEach(x=>x.classList.remove("bad"));
   const fail=(msg,el)=>{ miss.push(msg); if(el) bad.push(el); };
   const res=(document.querySelector('input[name="rs-res"]:checked')||{}).value;
-  const channel=(document.querySelector('input[name="rs-ch"]:checked')||{}).value||"visit";
   const notes=$("#rs-notes").value.trim(), nt=$("#rs-next").value.trim(), nd=$("#rs-nextd").value;
-  const gm=(document.querySelector('input[name="rs-gm"]:checked')||{}).value||"";
   const reason=$("#rs-reason").value;
-  const entries=[], people=[];
+  const people=[];
+  /* the result is the only required field: everything else is optional or filled by the app */
   if(!res) fail("اختر نتيجة الزيارة",$("#f-res"));
-  else if(res==="absent"){
-    if(!nd||nd<=v.date) fail("حدد موعد زيارة قادمة لأن العميل لم يتواجد",$("#rs-nextd"));
-  } else {
-    if(notes.length<25) fail("اكتب ملاحظة مفصلة (25 حرفاً على الأقل): ماذا يحتاج العميل وماذا اتفقتما",$("#rs-notes"));
-    if(!gm) fail("أجب: هل تحقق هدف الزيارة؟",$("#f-gm"));
-    if(res==="notnow"&&!reason) fail("اختر سبب عدم الاهتمام",$("#rs-reason"));
-    if(nt.length<5) fail("اكتب الخطوة القادمة",$("#rs-next"));
-    if(!nd||nd<=v.date) fail("حدد تاريخ الخطوة القادمة (بعد تاريخ الزيارة)",$("#rs-nextd"));
+  else if(nd&&nd<=v.date) fail("تاريخ الخطوة القادمة يجب أن يكون بعد تاريخ الزيارة",$("#rs-nextd"));
+  else if(res!=="absent"){
     others.forEach((o,i)=>{
       if(!$("#pp-on-"+i).checked) return;
       people.push({id:o.id,result:$("#pp-res-"+i).value});
@@ -1656,12 +1695,12 @@ async function saveResult(v,stg,others){
   }
   err.hidden=true;
   const abs=res==="absent", checks={};
-  if(!abs) stg.checks.forEach(k=>checks[k[0]]=$("#rs-ck-"+k[0]).checked);
+  if(!abs) document.querySelectorAll('#rs-checkbox:not([hidden]) label[data-ck]:not([hidden]) input').forEach(i=>{ checks[i.id.replace("rs-ck-","")]=i.checked; });
   const btn=$("#rs-save"); btn.disabled=true;
-  const ok=await updateVisit(v.id,{state:"done",result:res,channel,notes,next_text:nt,next_date:nd||null,checks,goal:abs?v.goal:$("#rs-goal").value,goal_met:abs?"":gm,reason:res==="notnow"?reason:"",people,time:$("#rs-time").value,done_at:new Date().toISOString(),done_by:S.email});
+  const ok=await updateVisit(v.id,{state:"done",result:res,channel:inferChannel(v),notes,next_text:nt,next_date:nd||null,checks,goal:v.goal||stg.goals[0],goal_met:inferGoalMet(v,res),reason:res==="notnow"?reason:"",people,time:$("#rs-time").value||nowHM2(),done_at:new Date().toISOString(),done_by:S.email});
   if(!ok){ btn.disabled=false; return; }
   let msg = "حُفظت النتيجة"; /* orders are never entered here: they come from the operations app */
-  if(nd && $("#rs-auto").checked && nd!==v.date && !visitFor(v.customerId,nd)){
+  if(nd && $("#rs-auto").checked && nd!==v.date && nd>=todayStr() && !visitFor(v.customerId,nd)){
     const nid=await createVisit(v.customerId,nd,{purpose:"followup",from_visit:v.id});
     if(nid) msg+=" وأُضيفت المتابعة لخطة "+dShort(nd);
   }
@@ -2495,6 +2534,7 @@ document.addEventListener("click",async e=>{
   if(a==="do-update") return doUpdate();
   if(a==="check-update") return checkUpdate(true);
   if(a==="dash-more"){ S.dashOpen=!S.dashOpen; return; }
+  if(a==="goto-recorded"){ S.dashOpen=true; setTab("dash"); setTimeout(()=>{ const el=$("#feed-sec"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); },80); return; }
   if(a==="goto-quotes"){ const el=$("#quotes-sec"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
   if(a==="call-log"){ /* the call link opens normally; the touch is logged once (repeat taps within 2 minutes are ignored) */
     const ck=b.dataset.kind==="qcall"?"qcall":"call"; S._calling=S._calling||{};
