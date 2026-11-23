@@ -361,7 +361,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-23.8"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-23.9"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -1193,12 +1193,16 @@ const FI={
   wallet:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18M16.5 15h.01M7 6V5a2 2 0 0 1 2-2h8"/></svg>',
   alert:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>',
   undo:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
-  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>'
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>',
+  chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .7 3.2 2.5 3.5 5.2"/></svg>',
+  star:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>',
+  book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6"/></svg>'
 };
 const FCHEV='<svg class="fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 /* one section = icon + title + count badge + chevron; the body folds. The state is remembered on the device. tone: accent | warn | bad | good */
 function foldSec(id,icon,title,badge,body,o){
-  o=o||{}; const closed=!!(S.fold&&S.fold[id]);
+  o=o||{}; const closed=(S.fold&&S.fold[id]!==undefined)?!!S.fold[id]:!!o.closed; /* the saved choice wins; otherwise the section's default */
   return '<section class="fold tone-'+(o.tone||"accent")+(closed?' is-closed':'')+'" id="fs-'+id+'">'
     +'<button type="button" class="fold-h" data-act="fold" data-sec="'+id+'" aria-expanded="'+(!closed)+'" aria-controls="fc-'+id+'">'
     +'<span class="fold-t"><span class="fold-i" aria-hidden="true">'+(FI[icon]||"")+'</span><span style="min-width:0">'+title+(o.sub?'<span class="fold-s">'+o.sub+'</span>':'')+'</span></span>'
@@ -1206,11 +1210,32 @@ function foldSec(id,icon,title,badge,body,o){
     +'<div class="fold-c" id="fc-'+id+'"'+(closed?' hidden':'')+'>'+body+'</div></section>';
 }
 function foldToggle(id,force){
-  if(!S.fold) S.fold={}; S.fold[id]=force==null?!S.fold[id]:!!force;
+  if(!S.fold) S.fold={};
+  const s=document.getElementById("fs-"+id), c=document.getElementById("fc-"+id);
+  const cur=s?s.classList.contains("is-closed"):!!S.fold[id];
+  S.fold[id]=force==null?!cur:!!force;
   try{ localStorage.setItem("ptv-fold",JSON.stringify(S.fold)); }catch(e){}
-  const s=document.getElementById("fs-"+id), c=document.getElementById("fc-"+id); if(!s||!c) return;
+  if(!s||!c) return;
   s.classList.toggle("is-closed",!!S.fold[id]); c.hidden=!!S.fold[id];
   const b=s.querySelector(".fold-h"); if(b) b.setAttribute("aria-expanded",String(!S.fold[id]));
+}
+/* the follow-up page is built from plain cards: each card becomes a foldable section (same component as the home page), keyed by its title */
+const DASH_FOLD=[ /* [title, id, icon, tone, closed by default, match by prefix] */
+  ["اليوم","d-today","check","accent",0],["هذا الأسبوع","d-week","chart","accent",0],["شهر","d-month","chart","accent",0,1],
+  ["التسعيرات المفتوحة","d-openq","tag","warn",0],["العملاء","d-clients","users","accent",0],["المال","d-money","wallet","good",0],["إنجازاتك","d-ach","star","good",0],
+  ["ملخص سريع","d-sum","chart","accent",1],["تفصيل الأسبوع","d-week2","chart","accent",1],["الخطة مقابل الفعلي","d-plan","chart","accent",1],
+  ["الزيارات المنجزة","d-chart","chart","accent",1,1],["جودة الزيارات","d-quality","check","accent",1],["الفرص والتنبيهات","d-opps","alert","warn",1],
+  ["تدريب","d-train","book","accent",1,1],["التسعير والإغلاق","d-quotes","tag","accent",1],["فئات العملاء","d-tiers","users","accent",1],
+  ["أسباب عدم الاهتمام","d-reasons","alert","warn",1],["قاعدة العملاء","d-base","users","accent",1],["آخر النشاط","feed","chat","accent",1]
+];
+function foldifyDash(html){
+  const used={};
+  return html.replace(/<section class="card"(?: id="[^"]*")?><h3>([\s\S]*?)<\/h3>([\s\S]*?)<\/section>/g,(m,head,body)=>{
+    const sm=head.match(/^([\s\S]*?)\s*<small>([\s\S]*?)<\/small>\s*$/), title=(sm?sm[1]:head).trim(), sub=sm?sm[2].trim():"";
+    const r=DASH_FOLD.find(x=>x[5]?title.startsWith(x[0]):title===x[0])||[title,"d-"+hash(title),"chart","accent",0];
+    let id=r[1]; if(used[id]) id+="-"+used[id]; used[r[1]]=(used[r[1]]||0)+1;
+    return foldSec(id,r[2],title,"",body,{tone:r[3],sub,closed:!!r[4]});
+  });
 }
 function visitArea(c){ return String(c&&(facOf(c).area||c.area)||"").trim(); }
 function todayHTML(){
@@ -1469,8 +1494,8 @@ function dashHTML(){
       +'<div class="tile"><b>'+fm(sum(ordM))+'</b><span>مبيعات الشهر (ر.س)</span></div><div class="tile"><b>'+(mg(ordM)==null?"—":mg(ordM)+"%")+'</b><span>هامش الشهر</span></div></div></section>';
   }
   h+=achCard(t);
-  h+='<details class="more"'+(S.dashOpen?' open':'')+'><summary data-act="dash-more" class="btn" style="width:100%;justify-content:center;cursor:pointer">تفاصيل أكثر</summary>'+dashFullHTML()+'</details>';
-  return h;
+  h+=dashFullHTML(); /* the detail cards follow as folded sections (opened with a tap) */
+  return foldifyDash(h);
 }
 function dashFullHTML(){
   const t=todayStr(), cfg=S.cfg, ws=weekStart(t), we=addDays(ws,6), mk=monthKey(t);
@@ -1495,25 +1520,24 @@ function dashFullHTML(){
     field: wq.length? Math.round(wq.filter(v=>v.channel!=="call").length/wq.length*100):0
   };
   const mName = MONTHS[Number(mk.slice(5))-1];
-  let h='<div class="tiles">'
+  let h='<section class="card"><h3>ملخص سريع</h3><div class="tiles">'
    +'<div class="tile"><b>'+today.length+'<small style="font-size:13px;color:var(--ink-3)"> / '+cfg.dailyTarget+'</small></b><span>زيارات اليوم</span></div>'
    +'<div class="tile"><b>'+ordersIn(t,t)+'</b><span>طلبيات اليوم</span></div>'
    +'<div class="tile"><b>'+cur.length+'</b><span>عملاء حاليون الآن</span></div>'
-   +'<div class="tile"><b>'+lap.length+'</b><span>سابقون للاسترجاع</span></div></div>';
-  h+='<div class="split">';
-  h+='<section class="card"><h3>هذا الأسبوع <small>'+esc(dShort(ws))+' – '+esc(dShort(addDays(ws,5)))+'</small></h3>'
+   +'<div class="tile"><b>'+lap.length+'</b><span>سابقون للاسترجاع</span></div></div></section>';
+  h+='<section class="card"><h3>تفصيل الأسبوع <small>'+esc(dShort(ws))+' – '+esc(dShort(addDays(ws,5)))+'</small></h3>'
    +kpi("الزيارات المنجزة",week.length,cfg.dailyTarget*6,{pace})
    +kpi("زيارات أولى لعملاء جدد (من الصفر)",freshVisits(ws,we,null,true).length,cfg.weeklyNew,{pace})
    +kpi("متابعات عملاء جدد في القمع",week.filter(v=>v.kind==="new").length-freshVisits(ws,we,null,true).length,0)
    +kpi("الطلبيات (من العمليات)",ordersIn(ws,we),cfg.weeklyOrders,{pace})
    +kpi("الحاليون ضمن وتيرة زيارتهم",covered,cur.length,{hint:"فئة A كل أسبوعين، وB شهرياً، وC كل 5 إلى 6 أسابيع، والرسائل بين الزيارتين"})
    +'</section>';
-  h+='<section class="card"><h3>شهر '+esc(mName)+' <small>الخطة مقابل الفعلي</small></h3>'
+  h+='<section class="card"><h3>الخطة مقابل الفعلي <small>شهر '+esc(mName)+'</small></h3>'
    +kpi("تحويل جدد إلى حاليين",conv,cfg.monthlyConv,{hint:"يصبح العميل الجديد حالياً بعد "+cfg.ordersToConvert+" طلبيات"})
    +kpi("استرجاع عملاء سابقين",rec,0,{hint:"السابق يعود حالياً بأول طلبية جديدة"})
    +kpi("طلبيات الشهر",ordersIn(mk+"-01",mk+"-31"),0)
    +kpi("عدد العملاء الحاليين مقابل خطة الشهر",cur.length,planNow,{hint:"الخطة: "+cfg.planStartCount+" عملاء في البداية + "+cfg.monthlyConv+" كل شهر"})
-   +'</section></div>';
+   +'</section>';
   h+='<section class="card"><h3>الزيارات المنجزة · آخر 14 يوماً <small>الخط المتقطع = الهدف</small></h3>'+chart14(t)+'</section>';
   h+='<section class="card"><h3>جودة الزيارات <small>'+(week.length?"هذا الأسبوع":"آخر الزيارات")+' · '+wq.length+' زيارة</small></h3>'
    +kpi("متوسط قائمة الجودة",q.score,100,{pct:1,hint:"قائمة تتغير حسب نوع العميل ومرحلته"})
@@ -1522,7 +1546,6 @@ function dashFullHTML(){
    +kpi("زيارات بخطوة قادمة محددة",q.next,100,{pct:1})
    +kpi("زيارات ميدانية بدل الاتصال",q.field,100,{pct:1,hint:"الزيارة الميدانية مفضّلة على الاتصال"})
    +'</section>';
-  h+=achCard(t);
   h+=oppsHTML();
   h+=trainHTML();
   h+=dashQuotes(t);
@@ -2812,7 +2835,7 @@ document.addEventListener("click",async e=>{
   if(a==="dash-more"){ S.dashOpen=!S.dashOpen; return; }
   if(a==="fold"){ foldToggle(b.dataset.sec); return; }
   if(a==="area-filter"){ S.visitArea=b.dataset.area||""; renderView(); return; }
-  if(a==="goto-recorded"){ S.dashOpen=true; setTab("dash"); setTimeout(()=>{ const el=$("#feed-sec"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); },80); return; }
+  if(a==="goto-recorded"){ S.fold.feed=false; try{ localStorage.setItem("ptv-fold",JSON.stringify(S.fold)); }catch(e){} setTab("dash"); setTimeout(()=>{ const el=$("#fs-feed"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); },80); return; }
   if(a==="goto-quotes"){ foldToggle("quotes",false); const el=$("#fs-quotes"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
   if(a==="call-log"){ /* the call link opens normally; the touch is logged once (repeat taps within 2 minutes are ignored) */
     const ck=b.dataset.kind==="qcall"?"qcall":b.dataset.kind==="paycall"?"paycall":"call"; S._calling=S._calling||{};
