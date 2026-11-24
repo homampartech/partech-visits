@@ -212,11 +212,42 @@ textarea.input{min-height:110px;resize:vertical;line-height:1.5}
 .fold-c .cust{box-shadow:none;background:var(--surface-2)}
 /* the workshop name, always shown the same way: a small pill with a building icon */
 .factag{display:inline-flex;align-items:center;gap:6px;max-width:100%;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:14px;line-height:1.5;padding:2px 10px;border-radius:10px;vertical-align:middle}
-.factag svg{width:15px;height:15px;flex:none}
-.factag span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cust .c-main{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.factag{align-items:flex-start}
+.factag svg{width:15px;height:15px;flex:none;margin-top:4px}
+.factag span{min-width:0;white-space:normal;overflow-wrap:anywhere}
+/* customer card: identity on top, status chips and recency in a footer row, so nothing overlaps on a narrow phone */
+.cust{flex-wrap:wrap;align-items:flex-start;row-gap:10px}
+.cust .c-main{display:flex;flex-direction:column;gap:6px;align-items:flex-start;flex:1 1 0;min-width:0}
+.cust .c-name{white-space:normal;overflow:visible;line-height:1.35}
 .cust .c-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:100%;font-size:15px;color:var(--ink-2)}
-.cust .c-why{font-size:13px;color:var(--ink-3)}
+.cust .c-line .factag{max-width:100%}
+.cust .c-why{font-size:13px;color:var(--ink-3);line-height:1.5;white-space:normal;display:block}
+.cust .c-side{flex:1 1 100%;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding-top:10px;border-top:1px solid var(--line);text-align:start}
+.cust .c-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.cust .c-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:13px;color:var(--ink-3)}
+/* KPI blocks of the follow-up page */
+.k3{display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--surface-2);border-radius:16px}
+.k3-h{font-weight:700;font-size:16px}
+.k3-c{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.k3-c>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.k3-c b{font-size:22px;line-height:1.2;font-variant-numeric:tabular-nums}
+.k3-c b small{font-size:13px;color:var(--ink-3);font-weight:500}
+.k3-c span{font-size:12px;color:var(--ink-3)}
+.k3 .hint{font-size:13px;color:var(--ink-3)}
+.kts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.kt{background:var(--surface-2);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.kt-l{font-size:14px;color:var(--ink-2)}
+.kt b{font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}
+.kt b small{font-size:14px;color:var(--ink-3);font-weight:500}
+.kt-s{font-size:13px;color:var(--ink-3)}
+.kt-warn{background:var(--warn-soft)}
+.kt-bad{background:var(--bad-soft)}
+.rep{background:var(--surface-2);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.rep-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:17px}
+.rep .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+.rep .tile{background:var(--surface)}
+.rep .tile b{font-size:18px}
+.rep .tile span{font-size:12px}
 .filters button{min-height:40px;display:inline-flex;align-items:center;gap:6px}
 .fold-link{appearance:none;border:0;background:var(--surface);box-shadow:var(--shadow);border-radius:24px;width:100%;display:flex;align-items:center;gap:12px;padding:12px 16px;min-height:60px;cursor:pointer;color:var(--ink);font-family:var(--f-display);font-weight:800;font-size:19px;text-align:start}
 .fold-link .fold-t{flex:1}
@@ -371,7 +402,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-24.1"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-24.2"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -1478,7 +1509,8 @@ function updateCustomers(){
      +'<span class="c-main"><span class="c-name">'+esc(cname(c))+(custIssues(c).length?' ⚠':'')+'</span>'
      +'<span class="c-line">'+facTag(c)+(c.title?'<span>'+esc(c.title)+'</span>':'')+'</span>'
      +'<span class="c-why">'+esc(pri.get(c.id).reason)+'</span></span>'
-     +'<span class="c-side"><span>'+tierChip(c)+' '+chipFor(c.id)+'</span>'+intChip(c)+'<span class="'+(overdue?"due":"")+'">'+esc(ago(lv))+'</span>'+(d&&d.count?'<span>'+d.count+' طلبية</span>':'')+'</span></button>';
+     +'<span class="c-side"><span class="c-chips">'+tierChip(c)+chipFor(c.id)+intChip(c)+'</span>'
+     +'<span class="c-meta"><span class="'+(overdue?"due":"")+'">'+esc(ago(lv))+'</span>'+(d&&d.count?'<span>'+d.count+' طلبية</span>':'')+'</span></span></button>';
   };
   /* the same foldable sections as the other pages: one per customer status, each sorted by priority */
   const G=[["current","حاليون","good","طلبوا ضمن الفترة الأخيرة"],["new","جدد","new","في مسار الثلاث طلبيات"],["lapsed","سابقون","warn","للاسترجاع"]];
@@ -1499,41 +1531,139 @@ function kpi(label, val, target, opt){
 }
 function ordersIn(from,to){ return S.events.filter(e=>e.date>=from&&e.date<=to).length; } /* real orders, from the operations app */
 /* simplified performance page: today / week / month on the few numbers that matter, the quote pipeline, and (manager only) money; everything else folds under "details" */
+/* a KPI with its three periods side by side (today / this week / this month), one bar for the period that matters */
+function k3(label,v,t,o){
+  o=o||{}; t=t||{};
+  const cell=(k,name)=>'<div><b class="num">'+v[k]+(t[k]?'<small> / '+t[k]+'</small>':'')+'</b><span>'+name+'</span></div>';
+  const bk=o.bar, tv=bk&&t[bk]?t[bk]:0, p=tv?pct(v[bk],tv):0, pace=o.pace;
+  const cls=tv?(v[bk]>=tv?"ok":(pace!=null&&v[bk]<tv*pace*0.8?"low":"")):"";
+  return '<div class="k3"><div class="k3-h"><span>'+label+'</span></div><div class="k3-c">'+cell("d","اليوم")+cell("w","الأسبوع")+cell("m","الشهر")+'</div>'
+    +(tv?'<div class="bar"><i class="'+cls+'" style="width:'+p+'%"></i>'+(pace!=null&&pace<1?'<em style="inset-inline-start:calc('+Math.round(pace*100)+'% - 1px)" title="الوتيرة المطلوبة حتى اليوم"></em>':'')+'</div>':'')
+    +(o.hint?'<div class="hint">'+o.hint+'</div>':'')+'</div>';
+}
+/* a headline number with its target and a thin bar: the four tiles at the top of the page */
+function kt(label,val,target,o){
+  o=o||{}; const p=target?pct(val,target):0, cls=target&&val>=target?"ok":"";
+  return '<div class="kt'+(o.tone?' kt-'+o.tone:'')+'"><span class="kt-l">'+label+'</span><b class="num">'+val+(target?'<small> / '+target+'</small>':'')+'</b>'
+    +(target?'<div class="bar"><i class="'+cls+'" style="width:'+p+'%"></i></div>':'<span class="kt-s">'+(o.sub||"")+'</span>')+'</div>';
+}
+function commissionBox(day){
+  const a=achievements(day), cfg=S.cfg, mk=monthKey(day), cm=S.commission.get(mk), reached=a.st.month.w>=cfg.monthWins, left=Math.max(0,cfg.monthWins-a.st.month.w), fm=n=>Math.round(Number(n)||0).toLocaleString("en-US");
+  const who=S.isOwner?"عمولة المندوب":"عمولتك";
+  let money;
+  if(!reached) money='بقي <b>'+left+'</b> '+dealsW(left)+' ليبدأ احتساب '+who+': <b>'+cfg.bonusPct+'%</b> من صافي ربح كل صفقة فوق '+cfg.monthWins+' صفقة في الشهر (الربح بعد التوصيل).';
+  else if(!cm) money='بلغ هدف الشهر. جارٍ احتساب العمولة، وتظهر هنا خلال دقائق.';
+  else money='فوق هدف الشهر: <b>'+Number(cm.extra_n)+'</b> '+dealsW(Number(cm.extra_n))+'. '+who+' المؤكَّدة <b>'+fm(cm.confirmed)+'</b> ر.س'+(Number(cm.pending)>0?' + <b>'+fm(cm.pending)+'</b> ر.س معلّقة حتى يسدّد العملاء':'')+'.';
+  return '<div class="credit '+(reached?"on":"")+'">'+money+'</div><div class="hint v-sub">العمولة شهرية وتُصرف آخر الشهر، وتشمل الصفقات المسدّدة كاملة وغير المرتجعة وبهامش لا يقل عن 10%.</div>';
+}
+/* the follow-up page: one block per area of the work, each KPI shown once, in the same order as the home page (money, price requests, customers, visits) */
 function dashHTML(){
-  const t=todayStr(), cfg=S.cfg, ws=weekStart(t), we=addDays(ws,6), mk=monthKey(t), ms=mk+"-01", st=quoteStats(t);
-  const doneAll=S.visits.filter(v=>v.state==="done");
-  const vDay=doneAll.filter(v=>v.date===t).length, vWeek=doneAll.filter(v=>v.date>=ws&&v.date<=we).length;
+  const t=todayStr(), cfg=S.cfg, ws=weekStart(t), we=addDays(ws,6), mk=monthKey(t), ms=mk+"-01", st=quoteStats(t), me=String(S.email||"").toLowerCase();
+  const mine=v=>S.isOwner||String(v.doneBy||v.by||"").toLowerCase()===me; /* the manager sees the whole team, a salesman sees his own visits */
+  const done=S.visits.filter(v=>v.state==="done"&&mine(v));
+  const vDay=done.filter(v=>v.date===t).length, vWeek=done.filter(v=>v.date>=ws&&v.date<=we).length, vMonth=done.filter(v=>monthKey(v.date)===mk).length;
   let eW=0; for(let d=ws;d<=t;d=addDays(d,1)) if(dow(d)!==5) eW++;
   let eM=0; for(let d=ms;d<=t;d=addDays(d,1)) if(dow(d)!==5) eM++;
   const paceW=Math.min(1,eW/6), paceM=Math.min(1,eM/cfg.workDaysMonth);
+  const money=n=>Math.round(n).toLocaleString("en-US");
+  /* price requests */
   const openQ=S.quotes.filter(x=>liveQuote(x)&&x.stage==="بانتظار التأكيد"), dueN=quoteDue(t).length, oldest=openQ.reduce((m,q)=>Math.max(m,diff(quoteBaseDate(q),t)),0);
   const chased=openQ.filter(q=>diff(quoteBaseDate(q),t)>=2), chasedPct=chased.length?Math.round(chased.filter(q=>quoteDone(q).length>0).length/chased.length*100):100;
   const rate=st.month.n?Math.round(st.month.w/st.month.n*100):0, tr=Math.round(cfg.dailyWins/cfg.dailyQuotes*100);
-  const cur=[...S.customers.values()].filter(c=>stOf(c.id)==="current"), covered=cur.filter(c=>facSince(c,t)<=cadenceDays(c)*1.2).length;
-  let h=dashPayCard()+'<section class="card"><h3>اليوم</h3>'+kpi("زيارات",vDay,cfg.dailyTarget)+kpi("طلبات تسعير",st.day.n,cfg.dailyQuotes)+kpi("إغلاقات",st.day.w,cfg.dailyWins)+'</section>';
-  h+='<section class="card"><h3>هذا الأسبوع <small>'+esc(dShort(ws))+' – '+esc(dShort(addDays(ws,5)))+'</small></h3>'
-    +kpi("زيارات",vWeek,cfg.dailyTarget*6,{pace:paceW})+kpi("إغلاقات",st.week.w,cfg.weekWins,{pace:paceW})+kpi("طلبات تسعير",st.week.n,cfg.dailyQuotes*6,{pace:paceW})
-    +kpi("زيارات أولى لعملاء جدد",freshVisits(ws,we,null,true).length,cfg.weeklyNew,{pace:paceW})+'</section>';
-  h+='<section class="card"><h3>شهر '+esc(MONTHS[Number(mk.slice(5))-1])+'</h3>'
-    +kpi("إغلاقات",st.month.w,cfg.monthWins,{pace:paceM})+kpi("طلبات تسعير",st.month.n,cfg.dailyQuotes*cfg.workDaysMonth,{pace:paceM})
-    +kpi("نسبة الإغلاق",rate,tr,{pct:1,hint:"الهدف: "+cfg.dailyWins+" إغلاقات من كل "+cfg.dailyQuotes+" طلبات تسعير"})+'</section>';
-  h+='<section class="card"><h3>التسعيرات المفتوحة</h3><div class="tiles">'
-    +'<div class="tile"><b>'+openQ.length+'</b><span>تنتظر العميل</span></div><div class="tile"><b>'+dueN+'</b><span>متابعتها مستحقة اليوم</span></div>'
-    +'<div class="tile"><b>'+oldest+'</b><span>أقدمها (يوماً)</span></div>'
-    +(S.isOwner?'<div class="tile"><b>'+Math.round(openQ.reduce((s,q)=>s+(q.value||0),0)).toLocaleString("en-US")+'</b><span>قيمتها (ر.س)</span></div>':'')+'</div>'
-    +kpi("تسعيرات مضى عليها يومان وتمت متابعتها",chasedPct,100,{pct:1,hint:"الهدف أن لا تُنسى تسعيرة"})+'</section>';
-  h+='<section class="card"><h3>العملاء</h3>'+kpi("الحاليون ضمن وتيرة زيارتهم",covered,cur.length,{hint:"فئة A كل أسبوعين، وB شهرياً، وC كل 5 إلى 6 أسابيع"})+'</section>';
+  const lost=new Map(); S.quotes.filter(q=>q.status==="lost"&&q.date>=addDays(t,-60)).forEach(q=>lost.set(q.lostReason||"أخرى",(lost.get(q.lostReason||"أخرى")||0)+1));
+  /* money owed */
+  const pd=payDue(), pTot=pd.reduce((s,x)=>s+(x.rem||0),0), pTodo=pd.filter(x=>x.stage!=="wait"&&!x.sent).length, pLate=pd.filter(x=>x.stage==="late").length;
+  /* customers */
+  const all=[...S.customers.values()], cur=all.filter(c=>stOf(c.id)==="current"), lap=all.filter(c=>stOf(c.id)==="lapsed"), nw=all.filter(c=>stOf(c.id)==="new");
+  const covered=cur.filter(c=>facSince(c,t)<=cadenceDays(c)*1.2).length;
+  let conv=0, rec=0; for(const c of all){ const d=S.der.get(c.id); if(d.convertedOn&&monthKey(d.convertedOn)===mk) conv++; rec+=d.recovered.filter(x=>monthKey(x)===mk).length; }
+  const planNow=cfg.planStartCount+cfg.monthlyConv*Math.max(0,monthsBetween(cfg.planStartMonth,mk));
+  const fm=[...S.facM.values()], tiers={A:0,B:0,C:0}; fm.forEach(m=>tiers[m.tier]++);
+  const fadeAll=fm.filter(m=>m.fading&&m.tier!=="C"), fade=fadeAll.slice().sort((a,b)=>(a.tier===b.tier?b.comp-a.comp:a.tier<b.tier?-1:1)).slice(0,5);
+  const reasons=new Map(); S.visits.filter(v=>v.state==="done"&&v.reason&&v.date>=addDays(t,-60)).forEach(v=>reasons.set(v.reason,(reasons.get(v.reason)||0)+1));
+  /* visits quality (this week, or the latest visits when the week is empty) */
+  const wk=done.filter(v=>v.date>=ws&&v.date<=we), wq=wk.length?wk:done.slice().sort((a,b)=>a.date<b.date?1:-1).slice(0,30);
+  const qual={
+    score:(()=>{ const w=wq.filter(v=>checkN(v).t); return w.length?Math.round(w.reduce((s,v)=>s+checkN(v).n/checkN(v).t,0)/w.length*100):0; })(),
+    useful:wq.length?Math.round(wq.filter(v=>v.result==="order"||v.result==="interested").length/wq.length*100):0,
+    notes:wq.length?Math.round(wq.filter(v=>(v.notes||"").trim().length>=15).length/wq.length*100):0,
+    field:wq.length?Math.round(wq.filter(v=>v.channel!=="call").length/wq.length*100):0
+  };
+  const fold=(id,icon,title,badge,body,o)=>foldSec(id,icon,title,badge,body,o);
+  let h="";
+  /* 1) today at a glance */
+  h+=fold("k-today","check","اليوم","",'<div class="kts">'
+    +kt(S.isOwner?"زيارات الفريق":"زياراتك",vDay,cfg.dailyTarget)+kt("طلبات التسعير",st.day.n,cfg.dailyQuotes)+kt("الإغلاقات",st.day.w,cfg.dailyWins)
+    +kt("سداد مستحق",pd.length,0,{tone:pLate?"bad":pTodo?"warn":"",sub:pd.length?money(pTot)+" ر.س متبقية":"لا شيء مستحق"})+'</div>',{tone:"accent",sub:esc(dLong(t))});
+  /* 2) money owed */
+  if(pd.length) h+=fold("k-pay","wallet","سداد مستحق",pTodo?pTodo+" تحتاج تذكيراً":"",
+    '<div class="tiles"><div class="tile"><b>'+pd.length+'</b><span>طلبيات غير مسدّدة</span></div><div class="tile"><b>'+money(pTot)+'</b><span>المتبقي (ر.س)</span></div>'
+    +'<div class="tile"><b>'+pTodo+'</b><span>تحتاج تذكيراً</span></div><div class="tile"><b>'+pLate+'</b><span>متأخرة (بعد 7 أيام من التوريد)</span></div></div>'
+    +'<button class="btn" data-act="pay-due">عرض الطلبيات</button>',{tone:pLate?"bad":pTodo?"warn":"accent",sub:"طلبيات تم توريدها"});
+  /* 3) sales: closings, and (manager) value and margin */
+  let sales=k3("الإغلاقات (طلبيات مؤكدة)",{d:st.day.w,w:st.week.w,m:st.month.w},{d:cfg.dailyWins,w:cfg.weekWins,m:cfg.monthWins},{bar:"m",pace:paceM})
+    +kpi("نسبة الإغلاق هذا الشهر",rate,tr,{pct:1,hint:"الهدف: إغلاق "+cfg.dailyWins+" من كل "+cfg.dailyQuotes+" طلبات تسعير"});
   if(S.isOwner){
-    const ordW=S.orders.filter(o=>o.status!=="cancelled"&&o.date>=ws&&o.date<=we), ordM=S.orders.filter(o=>o.status!=="cancelled"&&o.date>=ms&&o.date<=t);
-    const sum=a=>Math.round(a.reduce((s,o)=>s+(o.value||0),0)), mg=a=>{ let v=0,m=0; a.forEach(o=>{ if(o.value>0&&S.costs.has(o.id)){ v+=o.value; m+=o.value*S.costs.get(o.id); } }); return v?Math.round(m/v*10)/10:null; };
-    const fm=x=>x.toLocaleString("en-US");
-    h+='<section class="card"><h3>المال <small>للمدير فقط</small></h3><div class="tiles">'
-      +'<div class="tile"><b>'+fm(sum(ordW))+'</b><span>مبيعات الأسبوع (ر.س)</span></div><div class="tile"><b>'+(mg(ordW)==null?"—":mg(ordW)+"%")+'</b><span>هامش الأسبوع</span></div>'
-      +'<div class="tile"><b>'+fm(sum(ordM))+'</b><span>مبيعات الشهر (ر.س)</span></div><div class="tile"><b>'+(mg(ordM)==null?"—":mg(ordM)+"%")+'</b><span>هامش الشهر</span></div></div></section>';
+    const ord=(a,b)=>S.orders.filter(o=>o.status!=="cancelled"&&o.date>=a&&o.date<=b), sum=a=>Math.round(a.reduce((s,o)=>s+(o.value||0),0));
+    const mg=a=>{ let v=0,m=0; a.forEach(o=>{ if(o.value>0&&S.costs.has(o.id)){ v+=o.value; m+=o.value*S.costs.get(o.id); } }); return v?Math.round(m/v*10)/10:null; };
+    const oW=ord(ws,we), oM=ord(ms,t), oD=ord(t,t);
+    sales+='<div class="tiles"><div class="tile"><b>'+money(sum(oD))+'</b><span>مبيعات اليوم (ر.س)</span></div><div class="tile"><b>'+money(sum(oW))+'</b><span>مبيعات الأسبوع (ر.س)</span></div>'
+      +'<div class="tile"><b>'+money(sum(oM))+'</b><span>مبيعات الشهر (ر.س)</span></div><div class="tile"><b>'+(mg(oM)==null?"—":mg(oM)+"%")+'</b><span>هامش الشهر</span></div></div>';
   }
-  h+=achCard(t);
-  h+=dashFullHTML(); /* the detail cards follow as folded sections (opened with a tap) */
-  return foldifyDash(h);
+  sales+=commissionBox(t);
+  h+=fold("k-sales","star","المبيعات","",sales,{tone:"good",sub:S.isOwner?"الإغلاقات والقيمة والهامش والعمولة":"إغلاقاتك وعمولتك"});
+  /* 4) price requests */
+  let qh=k3("طلبات التسعير",{d:st.day.n,w:st.week.n,m:st.month.n},{d:cfg.dailyQuotes,w:cfg.dailyQuotes*6,m:cfg.dailyQuotes*cfg.workDaysMonth},{bar:"w",pace:paceW,hint:cfg.workDaysMonth+" يوم عمل في الشهر"});
+  qh+='<div class="tiles"><div class="tile"><b>'+openQ.length+'</b><span>تنتظر العميل</span></div><div class="tile"><b>'+dueN+'</b><span>متابعتها مستحقة اليوم</span></div>'
+    +'<div class="tile"><b>'+oldest+'</b><span>أقدمها (يوماً)</span></div>'
+    +(S.isOwner?'<div class="tile"><b>'+money(openQ.reduce((s,q)=>s+(q.value||0),0))+'</b><span>قيمتها (ر.س)</span></div>':'<div class="tile"><b>'+chasedPct+'%</b><span>تمت متابعتها بعد يومين</span></div>')+'</div>';
+  if(S.isOwner) qh+=kpi("تسعيرات مضى عليها يومان وتمت متابعتها",chasedPct,100,{pct:1,hint:"الهدف أن لا تُنسى تسعيرة"});
+  if(lost.size) qh+='<div class="hint v-sub">أسباب عدم الإغلاق (آخر 60 يوماً): '+[...lost].sort((a,b)=>b[1]-a[1]).map(x=>esc(x[0])+" ("+x[1]+")").join("، ")+'</div>';
+  h+=fold("k-quotes","tag","التسعير","",qh,{tone:dueN?"warn":"accent",sub:"الهدف "+cfg.dailyQuotes+" طلبات يومياً"+(dueN?" · "+dueN+" متابعة مستحقة":"")});
+  /* 5) customers */
+  let ch=kpi("الحاليون ضمن وتيرة زيارتهم",covered,cur.length,{hint:"فئة A كل أسبوعين، وB شهرياً، وC كل 5 إلى 6 أسابيع، والرسائل بين الزيارتين"})
+    +kpi("العملاء الحاليون مقابل خطة الشهر",cur.length,planNow,{hint:"الخطة: "+cfg.planStartCount+" عملاء في بداية الخطة + "+cfg.monthlyConv+" كل شهر"})
+    +kpi("تحويل جدد إلى حاليين هذا الشهر",conv,cfg.monthlyConv,{hint:"يصبح العميل الجديد حالياً بعد "+cfg.ordersToConvert+" طلبيات"})
+    +'<div class="tiles"><div class="tile"><b>'+cur.length+'</b><span>حالي</span></div><div class="tile"><b>'+nw.length+'</b><span>جديد ('+nw.filter(c=>S.der.get(c.id).count>0).length+' بدأوا الطلب)</span></div>'
+    +'<div class="tile"><b>'+lap.length+'</b><span>سابق للاسترجاع</span></div><div class="tile"><b>'+rec+'</b><span>استرجعنا هذا الشهر</span></div></div>'
+    +'<div class="tiles"><div class="tile"><b>'+tiers.A+'</b><span>فئة A</span></div><div class="tile"><b>'+tiers.B+'</b><span>فئة B</span></div><div class="tile"><b>'+tiers.C+'</b><span>فئة C</span></div><div class="tile"><b>'+fadeAll.length+'</b><span>يبرد اهتمامها (A/B)</span></div></div>';
+  if(fade.length) ch+='<div class="v-sub" style="font-weight:700;color:var(--ink)">أولوية المتابعة: يبرد اهتمامها</div><div class="prio">'+fade.map(m=>'<div class="pi"><div class="pm"><b>'+esc(m.fac.name||"منشأة")+' <span class="chip tier tier-'+m.tier+'">'+m.tier+'</span></b><span class="pw">'
+    +esc(m.gap&&m.dso!=null?"كانت تطلب كل "+m.gap+" يوماً وقد مرّ "+m.dso+" يوماً":(LEVEL[m.level]||""))+'</span></div><button class="btn sm" data-act="cust" data-id="'+esc(m.people[0].id)+'">فتح</button></div>').join("")+'</div>';
+  if(reasons.size){ const mx=Math.max(...reasons.values()); ch+='<div class="v-sub" style="font-weight:700;color:var(--ink)">أسباب عدم الاهتمام · آخر 60 يوماً</div>'+[...reasons].sort((a,b)=>b[1]-a[1]).map(([k,n])=>'<div class="kpi"><div class="kl"><span>'+esc(k)+'</span><b class="num">'+n+'</b></div><div class="bar"><i style="width:'+Math.round(n/mx*100)+'%"></i></div></div>').join(""); }
+  h+=fold("k-clients","users","العملاء",fadeAll.length?fadeAll.length+" يبرد":"",ch,{tone:fadeAll.length?"warn":"accent",sub:cur.length+" حاليون · "+nw.length+" جدد · "+lap.length+" سابقون"});
+  /* 6) visits */
+  let vh=k3(S.isOwner?"الزيارات المنجزة (الفريق)":"زياراتك المنجزة",{d:vDay,w:vWeek,m:vMonth},{d:cfg.dailyTarget,w:cfg.dailyTarget*6,m:cfg.dailyTarget*cfg.workDaysMonth},{bar:"w",pace:paceW})
+    +kpi("زيارات أولى لعملاء جدد هذا الأسبوع",freshVisits(ws,we,null,true).length,cfg.weeklyNew,{pace:paceW})
+    +kpi("زيارات انتهت باهتمام أو طلبية",qual.useful,100,{pct:1,hint:wk.length?"هذا الأسبوع":"آخر الزيارات"})
+    +kpi("متوسط قائمة الجودة",qual.score,100,{pct:1,hint:"قائمة تتغير حسب نوع العميل ومرحلته"})
+    +kpi("زيارات بملاحظات واضحة",qual.notes,100,{pct:1})
+    +kpi("زيارات ميدانية بدل الاتصال",qual.field,100,{pct:1,hint:"الزيارة الميدانية مفضّلة على الاتصال"})
+    +'<div class="v-sub" style="font-weight:700;color:var(--ink)">آخر 14 يوماً · الخط المتقطع = الهدف</div>'+chart14(t);
+  h+=fold("k-visits","visit","الزيارات",vDay+" اليوم",vh,{tone:"accent",sub:S.isOwner?"زيارات الفريق كله":"زياراتك أنت"});
+  /* 7) team (manager only): each salesman's own activity */
+  if(S.isOwner){
+    const reps=[...S.team.values()].filter(m=>m.role!=="manager"||true);
+    const callK=k=>k==="call"||k==="qcall"||k==="paycall";
+    const rows=reps.map(m=>{
+      const em=String(m.email).toLowerCase(), vs=S.visits.filter(v=>v.state==="done"&&String(v.doneBy||v.by||"").toLowerCase()===em);
+      const d=vs.filter(v=>v.date===t).length, w=vs.filter(v=>v.date>=ws&&v.date<=we), mo=vs.filter(v=>monthKey(v.date)===mk).length;
+      const ms2=S.messages.filter(x=>String(x.by||"").toLowerCase()===em&&x.kind!=="quoteDrop"&&x.date>=ws&&x.date<=we), calls=ms2.filter(x=>callK(x.kind)).length;
+      const useful=w.length?Math.round(w.filter(v=>v.result==="order"||v.result==="interested").length/w.length*100):0, notes=w.length?Math.round(w.filter(v=>(v.notes||"").trim().length>=15).length/w.length*100):0;
+      return '<div class="rep"><div class="rep-h"><b>'+esc(m.name||em)+'</b><span class="chip muted">'+(m.role==="manager"?"مدير":"مندوب")+'</span></div><div class="tiles">'
+        +'<div class="tile"><b>'+d+' · '+w.length+' · '+mo+'</b><span>زيارات: اليوم · الأسبوع · الشهر</span></div>'
+        +'<div class="tile"><b>'+(ms2.length-calls)+' · '+calls+'</b><span>رسائل · اتصالات هذا الأسبوع</span></div>'
+        +'<div class="tile"><b>'+useful+'%</b><span>زيارات باهتمام أو طلبية</span></div><div class="tile"><b>'+notes+'%</b><span>ملاحظات واضحة</span></div></div></div>';
+    }).join("");
+    h+=fold("k-team","users","أداء الفريق","",rows+'<div class="hint v-sub">الإغلاقات والتسعير تُحسب من العمليات على مستوى العملاء، فلا تُنسب لمندوب بعينه.</div>',{tone:"accent",sub:"نشاط كل شخص بتسجيلاته"});
+  }
+  /* 8) recorded activity, then the extra cards (opportunities, training) */
+  const feed=S.visits.filter(v=>v.state!=="planned").sort((a,b)=>((b.doneAt||b.date)>(a.doneAt||a.date)?1:-1)).slice(0,20);
+  const todayN=S.visits.filter(v=>v.state==="done"&&v.date===t).length;
+  h+=fold("feed","chat","آخر النشاط",todayN?todayN+" اليوم":"",(S.isOwner?'<div class="v-sub">أضف توجيهاً على أي زيارة</div>':'<div class="v-sub">توجيهات المدير تظهر على زياراتك</div>')
+    +(feed.length?'<div class="feed">'+feed.map(v=>visitCard(v,{showDate:true,showBy:true})).join("")+'</div>':'<div class="empty"><b>لا يوجد نشاط بعد</b>تظهر هنا كل زيارة يتم تسجيلها، لحظة بلحظة.</div>'),{tone:"accent",sub:"الزيارات المسجّلة",closed:true});
+  h+=foldifyDash(oppsHTML()+trainHTML());
+  if(S.isOwner) h+='<button class="btn" data-act="settings">'+ICON.gear.replace("<svg",'<svg width="18" height="18"')+'أهداف الخطة</button>';
+  return h;
 }
 function dashFullHTML(){
   const t=todayStr(), cfg=S.cfg, ws=weekStart(t), we=addDays(ws,6), mk=monthKey(t);
