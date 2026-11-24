@@ -402,7 +402,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-24.2"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-24.3"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -471,7 +471,7 @@ const S = {
   day:todayStr(), filter:"all", q:"", sheet:null
 };
 try{ const t = localStorage.getItem("ptv-tab"); if(TABS.includes(t)) S.tab=t; }catch(e){}
-S.fold={}; S.visitArea=""; try{ S.fold=JSON.parse(localStorage.getItem("ptv-fold")||"{}")||{}; }catch(e){ S.fold={}; }
+S.fold={}; S.visitArea=""; /* every section starts folded each time the app is opened; what you open stays open only while the app is open */
 if(TABS.includes(location.hash.slice(1))) S.tab = location.hash.slice(1);
 let sb = null, channel = null, lastLoad = 0, installEvt = null;
 
@@ -1246,7 +1246,7 @@ function facTag(c){ const n=c?String(facOf(c).name||"").trim():""; return n?'<sp
 const FCHEV='<svg class="fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 /* one section = icon + title + count badge + chevron; the body folds. The state is remembered on the device. tone: accent | warn | bad | good */
 function foldSec(id,icon,title,badge,body,o){
-  o=o||{}; const closed=o.forceOpen?false:(S.fold&&S.fold[id]!==undefined)?!!S.fold[id]:!!o.closed; /* the saved choice wins; otherwise the section's default; a search or filter opens it */
+  o=o||{}; const closed=o.forceOpen?false:(S.fold&&S.fold[id]!==undefined)?!!S.fold[id]:true; /* folded unless opened during this session; a search or filter opens its section */
   return '<section class="fold tone-'+(o.tone||"accent")+(closed?' is-closed':'')+'" id="fs-'+id+'">'
     +'<button type="button" class="fold-h" data-act="fold" data-sec="'+id+'" aria-expanded="'+(!closed)+'" aria-controls="fc-'+id+'">'
     +'<span class="fold-t"><span class="fold-i" aria-hidden="true">'+(FI[icon]||"")+'</span><span style="min-width:0">'+title+(o.sub?'<span class="fold-s">'+o.sub+'</span>':'')+'</span></span>'
@@ -1258,7 +1258,6 @@ function foldToggle(id,force){
   const s=document.getElementById("fs-"+id), c=document.getElementById("fc-"+id);
   const cur=s?s.classList.contains("is-closed"):!!S.fold[id];
   S.fold[id]=force==null?!cur:!!force;
-  try{ localStorage.setItem("ptv-fold",JSON.stringify(S.fold)); }catch(e){}
   if(!s||!c) return;
   s.classList.toggle("is-closed",!!S.fold[id]); c.hidden=!!S.fold[id];
   const b=s.querySelector(".fold-h"); if(b) b.setAttribute("aria-expanded",String(!S.fold[id]));
@@ -1351,7 +1350,7 @@ function todayHTML(){
         +[...cnt.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([a,n])=>'<button type="button" data-act="area-filter" data-area="'+esc(a)+'" aria-pressed="'+(S.visitArea===a)+'">'+esc(a)+' <small>'+n+'</small></button>').join("")+'</div>':"";
       P.visits+=foldSec("visits","visit","زيارات بانتظار التنفيذ",S.visitArea?shown.length+" من "+p.length:String(p.length),
         chips+'<div class="list">'+shown.map(v=>{ const c=S.customers.get(v.customerId), why=day===t?mustReason(c,day):""; return visitCard(v,{must:!!why||must.has(v.customerId),reason:why?why+(c&&messagedToday(c)?" · راسلته اليوم لكن الزيارة ما زالت ضرورية":""):""}); }).join("")+'</div>',
-        {tone:"accent",sub:S.visitArea?"المنطقة: "+esc(S.visitArea):"حسب الأولوية"});
+        {tone:"accent",sub:S.visitArea?"المنطقة: "+esc(S.visitArea):(shown[0]?"الأولى: "+esc(cname(S.customers.get(shown[0].customerId))):"حسب الأولوية")});
     }
     /* recorded visits live in the follow-up tab: the home page keeps only what is left to do, plus one line of progress */
     if(d.length) P.rec+='<button type="button" class="fold-link" data-act="goto-recorded"><span class="fold-t"><span class="fold-i" aria-hidden="true" style="--tone:var(--good);--tone-soft:var(--good-soft)">'+FI.check+'</span><span style="min-width:0">سُجّل '+esc(plural(d.length,P_VISIT))+(day===t?" اليوم":"")+'<span class="fold-s">عرضها في المتابعة</span></span></span>'+FCHEV.replace('M6 9l6 6 6-6','M9 6l6 6-6 6').replace('class="fold-chev"','class="fold-chev" style="transform:scaleX(-1)"')+'</button>';
@@ -1594,7 +1593,7 @@ function dashHTML(){
   /* 1) today at a glance */
   h+=fold("k-today","check","اليوم","",'<div class="kts">'
     +kt(S.isOwner?"زيارات الفريق":"زياراتك",vDay,cfg.dailyTarget)+kt("طلبات التسعير",st.day.n,cfg.dailyQuotes)+kt("الإغلاقات",st.day.w,cfg.dailyWins)
-    +kt("سداد مستحق",pd.length,0,{tone:pLate?"bad":pTodo?"warn":"",sub:pd.length?money(pTot)+" ر.س متبقية":"لا شيء مستحق"})+'</div>',{tone:"accent",sub:esc(dLong(t))});
+    +kt("سداد مستحق",pd.length,0,{tone:pLate?"bad":pTodo?"warn":"",sub:pd.length?money(pTot)+" ر.س متبقية":"لا شيء مستحق"})+'</div>',{tone:"accent",sub:"زيارات "+vDay+"/"+cfg.dailyTarget+" · تسعير "+st.day.n+"/"+cfg.dailyQuotes+" · إغلاق "+st.day.w+"/"+cfg.dailyWins});
   /* 2) money owed */
   if(pd.length) h+=fold("k-pay","wallet","سداد مستحق",pTodo?pTodo+" تحتاج تذكيراً":"",
     '<div class="tiles"><div class="tile"><b>'+pd.length+'</b><span>طلبيات غير مسدّدة</span></div><div class="tile"><b>'+money(pTot)+'</b><span>المتبقي (ر.س)</span></div>'
@@ -1611,7 +1610,7 @@ function dashHTML(){
       +'<div class="tile"><b>'+money(sum(oM))+'</b><span>مبيعات الشهر (ر.س)</span></div><div class="tile"><b>'+(mg(oM)==null?"—":mg(oM)+"%")+'</b><span>هامش الشهر</span></div></div>';
   }
   sales+=commissionBox(t);
-  h+=fold("k-sales","star","المبيعات","",sales,{tone:"good",sub:S.isOwner?"الإغلاقات والقيمة والهامش والعمولة":"إغلاقاتك وعمولتك"});
+  h+=fold("k-sales","star","المبيعات","",sales,{tone:"good",sub:"إغلاقات الشهر "+st.month.w+"/"+cfg.monthWins+" · نسبة الإغلاق "+rate+"%"});
   /* 4) price requests */
   let qh=k3("طلبات التسعير",{d:st.day.n,w:st.week.n,m:st.month.n},{d:cfg.dailyQuotes,w:cfg.dailyQuotes*6,m:cfg.dailyQuotes*cfg.workDaysMonth},{bar:"w",pace:paceW,hint:cfg.workDaysMonth+" يوم عمل في الشهر"});
   qh+='<div class="tiles"><div class="tile"><b>'+openQ.length+'</b><span>تنتظر العميل</span></div><div class="tile"><b>'+dueN+'</b><span>متابعتها مستحقة اليوم</span></div>'
@@ -3030,7 +3029,7 @@ document.addEventListener("click",async e=>{
   if(a==="dash-more"){ S.dashOpen=!S.dashOpen; return; }
   if(a==="fold"){ foldToggle(b.dataset.sec); return; }
   if(a==="area-filter"){ S.visitArea=b.dataset.area||""; renderView(); return; }
-  if(a==="goto-recorded"){ S.fold.feed=false; try{ localStorage.setItem("ptv-fold",JSON.stringify(S.fold)); }catch(e){} setTab("dash"); setTimeout(()=>{ const el=$("#fs-feed"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); },80); return; }
+  if(a==="goto-recorded"){ S.fold.feed=false; setTab("dash"); setTimeout(()=>{ const el=$("#fs-feed"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); },80); return; }
   if(a==="goto-quotes"){ foldToggle("quotes",false); const el=$("#fs-quotes"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
   if(a==="call-log"){ /* the call link opens normally; the touch is logged once (repeat taps within 2 minutes are ignored) */
     const ck=b.dataset.kind==="qcall"?"qcall":b.dataset.kind==="paycall"?"paycall":"call"; S._calling=S._calling||{};
