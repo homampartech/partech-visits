@@ -402,7 +402,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-24.3"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-24.4"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -2137,8 +2137,7 @@ async function saveResult(v,stg,others){
     if(nid) msg+=" وأُضيفت المتابعة لخطة "+dShort(nd);
   }
   toast(msg); closeSheet();
-  /* a brand-new account gets a thank-you message right after the visit, already filled in */
-  if(stageOf(v.customerId).startsWith("new")) setTimeout(()=>{ const c=S.customers.get(v.customerId); if(c&&waSituation(c)) openWa(v.customerId); },500);
+  /* no popup: the thank-you message for a new account waits in "follow-up without a visit" and is sent with one tap when the salesman chooses */
 }
 
 /* orders: one row per person who ordered in a visit; margin is stored apart and only the manager can read it */
