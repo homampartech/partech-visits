@@ -208,6 +208,16 @@ textarea.input{min-height:110px;resize:vertical;line-height:1.5}
 .fold-c{padding:0 14px 16px;display:flex;flex-direction:column;gap:12px}
 .fold-c .visit{box-shadow:none;background:var(--surface-2)}
 .fold-c .v-sub{font-size:14px}
+.fold.tone-new{--tone:var(--new);--tone-soft:var(--new-soft)}
+.fold-c .cust{box-shadow:none;background:var(--surface-2)}
+/* the workshop name, always shown the same way: a small pill with a building icon */
+.factag{display:inline-flex;align-items:center;gap:6px;max-width:100%;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:14px;line-height:1.5;padding:2px 10px;border-radius:10px;vertical-align:middle}
+.factag svg{width:15px;height:15px;flex:none}
+.factag span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cust .c-main{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.cust .c-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:100%;font-size:15px;color:var(--ink-2)}
+.cust .c-why{font-size:13px;color:var(--ink-3)}
+.filters button{min-height:40px;display:inline-flex;align-items:center;gap:6px}
 .fold-link{appearance:none;border:0;background:var(--surface);box-shadow:var(--shadow);border-radius:24px;width:100%;display:flex;align-items:center;gap:12px;padding:12px 16px;min-height:60px;cursor:pointer;color:var(--ink);font-family:var(--f-display);font-weight:800;font-size:19px;text-align:start}
 .fold-link .fold-t{flex:1}
 .areachips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;scrollbar-width:none}
@@ -361,7 +371,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-23.12"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-24.1"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -1197,12 +1207,15 @@ const FI={
   chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .7 3.2 2.5 3.5 5.2"/></svg>',
   star:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>',
-  book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6"/></svg>'
+  book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6"/></svg>',
+  bldg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13M9 21v-6h6v6M8 11h.01M12 11h.01M16 11h.01"/></svg>'
 };
+/* the workshop (facility) name as a neat pill: used on every customer, visit, quote and payment card */
+function facTag(c){ const n=c?String(facOf(c).name||"").trim():""; return n?'<span class="factag">'+FI.bldg+'<span>'+esc(n)+'</span></span>':""; }
 const FCHEV='<svg class="fold-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 /* one section = icon + title + count badge + chevron; the body folds. The state is remembered on the device. tone: accent | warn | bad | good */
 function foldSec(id,icon,title,badge,body,o){
-  o=o||{}; const closed=(S.fold&&S.fold[id]!==undefined)?!!S.fold[id]:!!o.closed; /* the saved choice wins; otherwise the section's default */
+  o=o||{}; const closed=o.forceOpen?false:(S.fold&&S.fold[id]!==undefined)?!!S.fold[id]:!!o.closed; /* the saved choice wins; otherwise the section's default; a search or filter opens it */
   return '<section class="fold tone-'+(o.tone||"accent")+(closed?' is-closed':'')+'" id="fs-'+id+'">'
     +'<button type="button" class="fold-h" data-act="fold" data-sec="'+id+'" aria-expanded="'+(!closed)+'" aria-controls="fc-'+id+'">'
     +'<span class="fold-t"><span class="fold-i" aria-hidden="true">'+(FI[icon]||"")+'</span><span style="min-width:0">'+title+(o.sub?'<span class="fold-s">'+o.sub+'</span>':'')+'</span></span>'
@@ -1285,7 +1298,7 @@ function todayHTML(){
     const pd=payDue();
     if(pd.length){
       const ptot=pd.reduce((s,x)=>s+(x.rem||0),0), ptodo=pd.filter(x=>x.stage!=="wait"&&!x.sent).length, urgent=pd.some(x=>(x.stage==="late"||x.stage==="end")&&!x.sent);
-      const row=x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+'</b><span class="pw">'+esc((x.o.orderNo?"طلبية "+x.o.orderNo+" · ":"")+(x.stage==="late"?"متأخرة "+plural(x.age-PAY_DAYS,P_DAY):PAY_LAB[x.stage]))+'</span><span class="pw" style="color:var(--ink);font-weight:700"><bdi>'+(x.rem>0?x.rem.toLocaleString("en-US"):"—")+'</bdi> ر.س</span></div>'
+      const row=x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+'</b>'+(facTag(x.c)?'<span>'+facTag(x.c)+'</span>':'')+'<span class="pw">'+esc((x.o.orderNo?"طلبية "+x.o.orderNo+" · ":"")+(x.stage==="late"?"متأخرة "+plural(x.age-PAY_DAYS,P_DAY):PAY_LAB[x.stage]))+'</span><span class="pw" style="color:var(--ink);font-weight:700"><bdi>'+(x.rem>0?x.rem.toLocaleString("en-US"):"—")+'</bdi> ر.س</span></div>'
         +(phoneOk(normPhone(x.c.phone))?'<button class="btn sm'+(x.stage!=="wait"&&!x.sent?" primary":"")+'" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'" data-oid="'+esc(x.o.id)+'">'+(x.sent?"أُرسل":"تذكير")+'</button>':'')+'</div>';
       P.pay=foldSec("pay","wallet","سداد مستحق",pd.length+(ptodo?" · "+ptodo+" تحتاج تذكيراً":""),
         '<div class="prio">'+pd.slice(0,3).map(row).join("")+'</div><button class="btn" data-act="pay-due">عرض كل الطلبيات ('+pd.length+')</button>',
@@ -1382,7 +1395,7 @@ function followItems(day){
 }
 function followHTML(day){
   const L=followItems(day); if(!L.length) return "";
-  const row=x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b><span class="pw">'+esc(x.label)+'</span></div>'
+  const row=x=>'<div class="pi wa"><div class="pm"><b>'+esc(cname(x.c))+' '+tierChip(x.c)+'</b>'+(facTag(x.c)?'<span>'+facTag(x.c)+'</span>':'')+'<span class="pw">'+esc(x.label)+'</span></div>'
     +(x.ch==="call"?'<a class="btn sm primary" data-act="call-log" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'" href="tel:'+esc(normPhone(x.c.phone))+'">اتصال</a>':'<button class="btn sm primary" data-act="wa" data-id="'+esc(x.c.id)+'" data-kind="'+x.kind+'">رسالة</button>')+'</div>';
   /* messages and calls are sent from anywhere: no area filter here */
   return foldSec("follow","chat","متابعة بدون زيارة",String(L.length),'<div class="v-sub">رسالة واحدة تكفي وتُحسب متابعة، ويختفي العميل بعد إرسالها.</div><div class="prio">'+L.map(row).join("")+'</div>',{tone:"accent",sub:"رسائل واتساب واتصالات"});
@@ -1404,7 +1417,7 @@ function visitCard(v,o){
   const phone=c.phone||"";
   let h='<article class="visit st-'+esc(v.state)+'">'
    +'<div class="v-top"><div style="min-width:0"><div class="v-name">'+(o.noLink?esc(cname(c)):'<button data-act="cust" data-id="'+esc(v.customerId)+'">'+esc(cname(c))+'</button>')+'</div>'
-   +'<div class="v-sub">'+esc([facOf(c).name,c.title].filter(Boolean).join(" · "))+'</div>'
+   +'<div class="v-sub" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+facTag(c)+(c.title?'<span>'+esc(c.title)+'</span>':'')+'</div>'
    +(o.reason?'<div class="v-sub" style="color:var(--bad)">'+esc(o.reason)+'</div>':'')
    +(otherNames(v).length?'<div class="v-sub">ومعه: '+esc(otherNames(v).join("، "))+'</div>':'')
    +(o.showBy?'<div class="v-sub">سجّلها: '+esc(teamName(v.doneBy||v.by))+'</div>':'')+'</div>'
@@ -1458,12 +1471,20 @@ function updateCustomers(){
   const el=$("#cust-list");
   if(!all.length){ el.innerHTML='<div class="empty"><b>قاعدة العملاء فارغة</b>أضف أول عميل بزر + في الأعلى.</div>'; return; }
   if(!rows.length){ el.innerHTML='<div class="empty"><b>لا توجد نتائج</b>جرّب كلمة بحث أخرى أو فلتراً مختلفاً.</div>'; return; }
-  el.innerHTML=rows.map(c=>{
+  const card=c=>{
     const s=stOf(c.id), lv=S.lastVisit.get(c.id), d=S.der.get(c.id);
     const overdue = s==="current" && (!lv || diff(lv,todayStr())>=7);
     return '<button class="cust" data-act="cust" data-id="'+esc(c.id)+'"><span class="avatar '+s+'">'+esc(initials(c))+'</span>'
-     +'<span class="c-main"><span class="c-name">'+esc(cname(c))+'</span><span class="c-sub">'+esc([facOf(c).name,c.title].filter(Boolean).join(" · "))+(custIssues(c).length?' ⚠':'')+'</span><span class="c-why">'+esc(pri.get(c.id).reason)+'</span></span>'
+     +'<span class="c-main"><span class="c-name">'+esc(cname(c))+(custIssues(c).length?' ⚠':'')+'</span>'
+     +'<span class="c-line">'+facTag(c)+(c.title?'<span>'+esc(c.title)+'</span>':'')+'</span>'
+     +'<span class="c-why">'+esc(pri.get(c.id).reason)+'</span></span>'
      +'<span class="c-side"><span>'+tierChip(c)+' '+chipFor(c.id)+'</span>'+intChip(c)+'<span class="'+(overdue?"due":"")+'">'+esc(ago(lv))+'</span>'+(d&&d.count?'<span>'+d.count+' طلبية</span>':'')+'</span></button>';
+  };
+  /* the same foldable sections as the other pages: one per customer status, each sorted by priority */
+  const G=[["current","حاليون","good","طلبوا ضمن الفترة الأخيرة"],["new","جدد","new","في مسار الثلاث طلبيات"],["lapsed","سابقون","warn","للاسترجاع"]];
+  el.innerHTML=G.map(([s,title,tone,sub])=>{
+    const g=rows.filter(c=>stOf(c.id)===s); if(!g.length) return "";
+    return foldSec("c-"+s,"users",title,String(g.length),'<div class="list">'+g.map(card).join("")+'</div>',{tone,sub,closed:s==="lapsed",forceOpen:!!S.q.trim()||S.filter===s});
   }).join("");
 }
 
@@ -2286,6 +2307,7 @@ function quotesHTML(day){
     const isDue=!!d||/^(متابعة مستحقة|تُستحق|اتصل|أرسل)/.test(nt);
     return '<article class="qrow'+(isDue?' isdue':'')+'">'
      +'<div class="qtop"><b class="qname">'+esc(c?cname(c):"—")+'</b>'+(sent?'<span class="chip qsent">أُرسلت للعميل</span>':'<span class="chip muted">قيد الاعتماد</span>')+'</div>'
+     +(c&&facTag(c)?'<div>'+facTag(c)+'</div>':'')
      +'<div class="qitem"><bdi>'+esc(q.orderNo||shorten(q.item,60))+'</bdi></div>'
      +'<div class="qsub"><span>'+esc(age<=0?"اليوم":"منذ "+plural(age,P_DAY))+'</span>'+(q.value>0?'<span class="qamt" dir="rtl"><bdi>'+q.value.toLocaleString("en-US")+'</bdi> ر.س</span>':'')+'</div>'
      +'<div class="qnext'+(isDue?' isdue':'')+'">'+esc(nt)+'</div>'
@@ -2806,7 +2828,7 @@ function openPayDue(){
     const lab=x.stage==="late"?"متأخرة "+plural(x.age-PAY_DAYS,P_DAY):PAY_LAB[x.stage];
     const col=x.stage==="late"||x.stage==="end"?"background:var(--bad-soft);color:var(--bad)":x.stage==="mid"?"background:var(--orange-soft,#fff4e5);color:var(--orange,#b25e00)":"";
     return '<article class="visit"><div class="v-top"><div style="min-width:0"><div class="v-name">'+esc(cname(x.c))+'</div>'
-      +'<div class="v-sub">'+esc([fac,x.o.orderNo?"طلبية "+x.o.orderNo:"","وُرّدت "+dShort(x.sd)].filter(Boolean).join(" · "))+'</div></div>'
+      +(facTag(x.c)?'<div>'+facTag(x.c)+'</div>':'')+'<div class="v-sub">'+esc([x.o.orderNo?"طلبية "+x.o.orderNo:"","وُرّدت "+dShort(x.sd)].filter(Boolean).join(" · "))+'</div></div>'
       +'<div class="v-time" style="font-weight:700">'+money(x.rem)+'</div></div>'
       +'<div class="v-meta"><span class="chip" style="'+col+'">'+esc(lab)+'</span><span>'+(x.stage==="late"?"مرّ "+plural(x.age,P_DAY)+" على التوريد":"اليوم "+x.age+" من "+PAY_DAYS)+'</span>'+(x.sent?'<span class="chip muted">أُرسل التذكير</span>':'')+'</div>'
       +'<div class="v-actions">'+(ok?'<a class="btn sm" data-act="call-log" data-id="'+esc(x.c.id)+'" data-kind="paycall" href="tel:'+esc(ph)+'">اتصال</a>'
