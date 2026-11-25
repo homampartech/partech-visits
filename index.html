@@ -402,7 +402,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-24.4"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-25.1"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -2050,7 +2050,9 @@ function openResult(id, opt){
   const goal=v.goal||stg.goals[0];
   const hasNext=!!(v.state==="done"&&v.next&&v.next.text);
   let body='';
-  body+='<div class="field" id="f-res"><span class="lab">النتيجة</span><div class="seg">'+Object.keys(RESULT).filter(k=>k!=="order"||v.result==="order").map(k=>r("rs-res",k,RESULT[k],v.result===k)).join("")+'</div></div>';
+  /* same stored values for every account; only the wording follows the account's stage */
+  const RES_LAB=sk==="current"?{interested:"سيطلب قريباً",notnow:"لا حاجة الآن"}:sk==="lapsed"?{interested:"عاد للاهتمام",notnow:"ما زال متوقفاً"}:{interested:"مهتم - يحتاج متابعة",notnow:"غير مهتم حالياً"};
+  body+='<div class="field" id="f-res"><span class="lab">النتيجة</span><div class="seg">'+Object.keys(RESULT).filter(k=>k!=="order"||v.result==="order").map(k=>r("rs-res",k,RES_LAB[k]||RESULT[k],v.result===k)).join("")+'</div></div>';
   body+='<div class="field" id="rs-smart" hidden>'
     +'<div class="v-note"><span class="k">الهدف</span>'+esc(goal)+'</div>'
     +'<div class="v-note"><span class="k">الخطوة القادمة · يقترحها التطبيق</span><span id="rs-nextline"></span></div>'
