@@ -402,7 +402,7 @@ select.input{appearance:auto}
 /* ---- Supabase project (public URL + publishable key; access is enforced by row-level security) ---- */
 const SUPABASE_URL = "https://hcjarrtpnbxjndrfiskk.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TCzxlDpYrWsAvtrA2rXO1A_cC1iA7k4";
-const APP_VERSION="2026-11-25.1"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
+const APP_VERSION="2026-11-25.2"; /* bump on every deploy: devices compare it with the live index.html and offer an update button */
 </script>
 <script>
 (function(){
@@ -643,7 +643,7 @@ async function guard(q, okMsg){
 }
 
 /* ---------- row mapping ---------- */
-function rowToCust(r){return {id:r.id, person:r.person||"", title:r.title||"", org:r.org||"", area:r.area||"", phone:r.phone||"", phone2:r.phone2||"", type:r.type||"", base:r.base||"new", since:r.since||"", lastVisit:r.last_visit||"", note:r.note||"", important:!!r.important, facilityId:r.facility_id||null};}
+function rowToCust(r){return {id:r.id, person:r.person||"", title:r.title||"", org:r.org||"", area:r.area||"", phone:r.phone||"", phone2:r.phone2||"", type:r.type||"", base:r.base||"new", since:r.since||"", lastVisit:r.last_visit||"", note:r.note||"", important:!!r.important, snoozeUntil:r.snooze_until||"", facilityId:r.facility_id||null};}
 function rowToVisit(r){return {id:r.id, customerId:r.customer_id, date:r.date, time:r.time||"", kind:r.kind||"", purpose:r.purpose||"", state:r.state, result:r.result||"", channel:r.channel||"visit", notes:r.notes||"", next:{text:r.next_text||"", date:r.next_date||""}, checks:r.checks||{}, coach:{text:r.coach_text||"", at:r.coach_at}, by:r.by_email, doneBy:r.done_by, doneAt:r.done_at||"", createdAt:r.created_at||"", unplanned:!!r.unplanned, goal:r.goal||"", goalMet:r.goal_met||"", reason:r.reason||"", people:Array.isArray(r.people)?r.people:[]};}
 function rowToFac(r){return {id:r.id, name:r.name||"", type:r.type||"أخرى", area:r.area||"", location:r.location||"", branches:r.branches==null?1:Number(r.branches), fleet:Number(r.fleet||0), note:r.note||"", marginScore:r.margin_score==null?null:Number(r.margin_score)};}
 function rowToOrder(r){return {id:r.id, visitId:r.visit_id||null, customerId:r.customer_id||null, facilityId:r.facility_id||null, date:r.date, orderNo:r.order_no||"", value:r.value==null?null:Number(r.value), status:r.status||"confirmed", source:r.source||"manual"};}
@@ -767,10 +767,29 @@ function computeFacilities(){
     const perf=wavg(["value","margin","activity","interest"]), comp=wavg(["value","margin","activity","cap","interest"]);
     const perfTier=perf>=65?"A":perf>=38?"B":"C", capTier=cap>=4?"A":cap>=2?"B":"C";
     const tier=rank[perfTier]>=rank[capTier]?perfTier:capTier;
-    S.facM.set(k,{key:k,fac:f,people:ppl,tier,perfTier,capTier,comp,perf,axes,cap,score,level,fading,gap,dso,last,orders90:ev90.length,monthly:val90/3,evCount:evs.length});
+    /* no-response streak: the visits since his last sign of interest (an "interested" result or a real order) that ended in "not interested" (1) or "not found" (0.5).
+       From 2 points he rests: 30 days, then 60, 90, 120 as the streak grows (half as long for tier A and starred accounts). Any interest or order ends the streak at once. */
+    let nr=0, lastBad=""; const lastPos=evs.reduce((m,e)=>e.date>m?e.date:m,"");
+    for(const v of vis.slice().sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0)){
+      const rr=resFor(v,k,keyOf); if(rr==="interested"||rr==="order") break; if(lastPos&&v.date<=lastPos) break;
+      if(rr==="notnow"||rr==="absent"){ nr+=rr==="notnow"?1:.5; if(!lastBad) lastBad=v.date; }
+    }
+    const restBase=nr>=5?120:nr>=4?90:nr>=3?60:nr>=2?30:0, half=tier==="A"||ppl.some(p=>p.important);
+    const restUntil=restBase&&lastBad?addDays(lastBad,half?Math.round(restBase/2):restBase):"";
+    S.facM.set(k,{key:k,fac:f,people:ppl,tier,perfTier,capTier,comp,perf,axes,cap,score,level,fading,gap,dso,last,orders90:ev90.length,monthly:val90/3,evCount:evs.length,nr,restUntil});
   }
 }
 function fmOf(c){ return c?S.facM.get(facKey(c))||null:null; }
+/* rest period: the account leaves the plan, the priorities and the follow-up lists (quotes and payments are not affected).
+   Manual (a pause the salesman set) or automatic (a streak of no response). Returns null when he is not resting. */
+function restOf(c,day){
+  if(!c) return null; day=day||todayStr();
+  const fm=fmOf(c), ppl=fm?fm.people:[c]; let man="";
+  for(const p of ppl){ const x=(S.customers.get(p.id)||p).snoozeUntil||""; if(x>man) man=x; }
+  if(man>day) return {until:man,auto:false};
+  if(fm&&fm.restUntil&&fm.restUntil>day) return {until:fm.restUntil,auto:true,n:fm.nr};
+  return null;
+}
 function tierChip(c){ const m=fmOf(c); return m?'<span class="chip tier tier-'+m.tier+'" title="فئة العميل حسب حجم المنشأة ونشاطها وقيمة طلباتها">'+m.tier+'</span>':""; }
 function intChip(c){ const m=fmOf(c); return m&&m.level?'<span class="chip int-'+m.level+'">'+LEVEL[m.level]+'</span>':""; }
 function stageOf(cid){ const d=S.der.get(cid)||{status:"new",count:0}; if(d.status==="current") return "current"; if(d.status==="lapsed") return "lapsed"; return d.count>=2?"new2":d.count===1?"new1":"new0"; }
@@ -912,7 +931,8 @@ function scoreCustomer(c, day, ctx){
   const fm=fmOf(c);
   if(fm){
     if(fm.tier==="A") score+=14; else if(fm.tier==="B") score+=6;
-    if(fm.fading && fm.tier!=="C" && !cv && !fv){ score+=18; reason="⚠ اهتمامه يبرد · "+reason; }
+    if(fm.fading && fm.tier!=="C" && !cv && !fv && !(fm.nr>=1)){ score+=18; reason="⚠ اهتمامه يبرد · "+reason; }
+    if(fm.nr>=.5 && !cv && !fv){ score-=Math.min(fm.nr,4)*8; reason="قلّ ظهوره لعدم التجاوب · "+reason; } /* gradual fade: each unanswered attempt lowers him before the rest period starts */
     if(fm.tier==="A") reason="فئة A · "+reason;
   }
   return {score,reason,kind,carryVisit:cv||null,followVisit:fv||null};
@@ -923,6 +943,7 @@ function candidates(day){
   for(const c of S.customers.values()){
     if(visitFor(c.id,day)) continue;
     if(c.facilityId && planned.has(facKey(c))) continue; /* one visit per facility per day */
+    if(restOf(c,day)) continue; /* resting: no response so far, or paused by the salesman */
     const sc=scoreCustomer(c,day,ctx);
     if(!sc.carryVisit&&!sc.followVisit&&(msgOnly(c,day)||coveredByInbound(c))) continue; /* followed up by WhatsApp, or he already wrote to us today */
     out.push(Object.assign({id:c.id,c,fk:facKey(c),area:c.area||""},sc));
@@ -1370,7 +1391,7 @@ function dailyPriorities(day){
   const ctx=planCtx(day), best=new Map();
   for(const c of S.customers.values()){
     const dv=visitFor(c.id,day); if(dv&&dv.state==="done") continue;
-    if(coveredByInbound(c)) continue;
+    if(coveredByInbound(c)||restOf(c,day)) continue;
     const fm=fmOf(c), r=scoreCustomer(c,day,ctx), d=S.der.get(c.id)||{};
     let u=0, why="";
     const recent=facSince(c,day)<3; /* visited in the last 2 days: a "cooling" or win-back flag is not a reason to return to him again so soon */
@@ -1391,7 +1412,7 @@ function dailyPriorities(day){
     if(!o||u>o.u) best.set(k,{u,why:"عرض سعر مفتوح منذ "+plural(age,P_DAY)+": "+shorten(q.item,30)+" · تابعه قبل أن يشتري من غيرك",c,planned:!!dv});
   }
   for(const o of newPlaybook()){
-    if(o.late<1||o.touch[1]!=="visit") continue; const c=o.c, dv=visitFor(c.id,day), k=facKey(c), cur=best.get(k), u=89+Math.min(o.late,5);
+    if(o.late<1||o.touch[1]!=="visit"||restOf(o.c,day)) continue; const c=o.c, dv=visitFor(c.id,day), k=facKey(c), cur=best.get(k), u=89+Math.min(o.late,5);
     if(!cur||u>cur.u) best.set(k,{u,why:"لمسة متأخرة "+plural(o.late,P_DAY)+": "+o.touch[2],c,planned:!!dv});
   }
   for(const o of oppsList()){
@@ -1414,11 +1435,11 @@ function followItems(day){
   const keep=x=>stOf(x.c.id)!=="current"||msgOnly(x.c,day)||["afterVisit","thanksOrder","delivered","quote","quoteLast"].includes(x.s.kind);
   const items=waSuggestions(day,99).filter(x=>!/^quote/.test(x.s.kind)).filter(keep).map(x=>({c:x.c,kind:x.s.kind,label:WA[x.s.kind].label+(/^quote/.test(x.s.kind)&&x.s.item?" · "+shorten(x.s.item,26):""),why:WA[x.s.kind].why,ch:"msg",qid:x.s.qid,u:x.s.u})), seen=new Set(items.map(x=>facKey(x.c)));
   for(const c of S.customers.values()){ /* lapsed B/C accounts whose message went unanswered: call next */
-    const fm=fmOf(c); if(stOf(c.id)!=="lapsed"||!fm||fm.tier==="A"||seen.has(facKey(c))||!phoneOk(normPhone(c.phone))||lapsedFlow(c,day)!=="call") continue;
+    const fm=fmOf(c); if(stOf(c.id)!=="lapsed"||!fm||fm.tier==="A"||seen.has(facKey(c))||restOf(c,day)||!phoneOk(normPhone(c.phone))||lapsedFlow(c,day)!=="call") continue;
     seen.add(facKey(c)); items.push({c,kind:"cold",label:"اتصال: راسلناه ولم يطلب بعد",why:"",ch:"call",u:58});
   }
   for(const o of newPlaybook()){
-    if(o.late<0||o.touch[1]==="visit"||seen.has(o.k)) continue; seen.add(o.k);
+    if(o.late<0||o.touch[1]==="visit"||seen.has(o.k)||restOf(o.c,day)) continue; seen.add(o.k);
     items.push({c:o.c,kind:o.idx===0?"welcomeNew":"newbie",label:o.touch[2],why:"مسار العميل الجديد · اليوم "+o.age,ch:o.touch[1]==="call"?"call":"msg",u:75+Math.min(o.late,10)});
   }
   return items.sort((a,b)=>b.u-a.u);
@@ -1508,7 +1529,7 @@ function updateCustomers(){
      +'<span class="c-main"><span class="c-name">'+esc(cname(c))+(custIssues(c).length?' ⚠':'')+'</span>'
      +'<span class="c-line">'+facTag(c)+(c.title?'<span>'+esc(c.title)+'</span>':'')+'</span>'
      +'<span class="c-why">'+esc(pri.get(c.id).reason)+'</span></span>'
-     +'<span class="c-side"><span class="c-chips">'+tierChip(c)+chipFor(c.id)+intChip(c)+'</span>'
+     +'<span class="c-side"><span class="c-chips">'+tierChip(c)+chipFor(c.id)+intChip(c)+(restOf(c)?'<span class="chip notnow" title="في فترة راحة: لا يظهر في الخطة والتذكيرات">راحة</span>':'')+'</span>'
      +'<span class="c-meta"><span class="'+(overdue?"due":"")+'">'+esc(ago(lv))+'</span>'+(d&&d.count?'<span>'+d.count+' طلبية</span>':'')+'</span></span></button>';
   };
   /* the same foldable sections as the other pages: one per customer status, each sorted by priority */
@@ -1797,6 +1818,7 @@ function guideHTML(){
     +'<div><b>'+S.cfg.dailyQuotes+' طلبات تسعير يومياً</b> من عملائك وإغلاق <b>'+S.cfg.dailyWins+'</b> منها على الأقل (نحو '+S.cfg.workDaysMonth+' يوم عمل في الشهر، والجمعة إجازة). لا تُدخل شيئاً بيدك: طلبات التسعير وإغلاقاتها والطلبيات تأتي تلقائياً من برنامج العمليات.</div>'
     +'<div><b>'+S.cfg.weeklyNew+' زيارة أسبوعياً لعملاء جدد</b>، والهدف تحويل '+S.cfg.monthlyConv+' منهم إلى حاليين كل شهر.</div>'
     +'<div><b>مسار العميل الجديد (90 يوماً):</b> زيارة ثم رسالة شكر في اليوم نفسه، ورسالة فيها قيمة في اليوم 3، وزيارة أو اتصال في اليوم 7 مع طلب تجربة صغيرة، واتصال في 14، وزيارة في 21، ومراجعة في 30، ثم رسالة كل أسبوعين وزيارة شهرية. وبعد 90 يوماً بلا طلبية يتحول إلى متابعة بطيئة.</div>'
+    +'<div><b>عميل لا يتجاوب:</b> كل زيارة تنتهي بـ«غير مهتم» تحسب محاولة بلا تجاوب (و«لم يتواجد» نصف محاولة). مع كل محاولة يقل ظهوره في الخطة، وعند محاولتين يدخل <b>فترة راحة</b> 30 يوماً، ثم 60 و90 و120 إن استمر عدم التجاوب (نصف المدة لفئة A والعميل المميّز ★). وأي «مهتم» تسجله أو طلبية تصل من العمليات تُنهي ذلك فوراً. يمكنك أيضاً من بطاقة العميل أن تضغط «أوقف المتابعة مؤقتاً» (14 إلى 90 يوماً). التسعيرات والسداد لا تتأثر، ويمكنك إضافته للخطة يدوياً متى شئت.</div>'
     +'<div><b>الجديد يصبح حالياً</b> بعد '+S.cfg.ordersToConvert+' طلبيات. <b>الحالي يصبح سابقاً</b> إذا مر '+S.cfg.lapsedDays+' يوماً على آخر طلبية. <b>السابق يعود حالياً</b> بأول طلبية جديدة.</div>')
   +g("routine","check","روتين يومك",
      '<ol><li><b>بداية اليوم:</b> افتح تبويب «اليوم» وابدأ من الأعلى: سداد مستحق، ثم طلبات التسعير، ثم المتابعة بدون زيارة، ثم الزيارات.</li>'
@@ -2239,6 +2261,7 @@ function openCustomer(id){
     const loc=f.location&&/^https?:\/\//.test(f.location)?'<a href="'+esc(f.location)+'" target="_blank" rel="noopener">فتح على الخريطة</a>':esc(f.location||"—");
     let h='<dl class="kv">'
       +'<dt>الحالة</dt><dd>'+chipFor(id)+' '+tierChip(c)+' '+intChip(c)+(d.status==="new"?' <span class="v-sub">متبقٍ '+d.toGo+' طلبية ليصبح حالياً</span>':'')+'</dd>'
+      +(()=>{ const rs=restOf(c), n=fm&&fm.nr>=1?fm.nr:0; return rs?'<dt>الراحة</dt><dd>حتى '+esc(dShort(rs.until))+' <span class="v-sub">'+(rs.auto?'تلقائياً بعد '+(n%1?n.toFixed(1):n)+' محاولات بلا تجاوب · تنتهي بتسجيل اهتمام أو طلبية':'أوقفتها يدوياً')+'</span></dd>':n?'<dt>عدم التجاوب</dt><dd>'+(n%1?n.toFixed(1):n)+' <span class="v-sub">محاولات متتالية · يقل ظهوره، وعند بلوغ 2 يدخل فترة راحة</span></dd>':''; })()
       +'<dt>المنصب</dt><dd>'+esc(c.title||"—")+'</dd><dt>المنشأة</dt><dd>'+esc(f.name||"—")+'</dd>'
       +'<dt>نوع المنشأة</dt><dd>'+esc(ftName(f.type))+'</dd><dt>المنطقة</dt><dd>'+esc(f.area||c.area||"—")+'</dd><dt>الموقع</dt><dd>'+loc+'</dd>'
       +(f.branches>1||f.fleet>0?'<dt>الحجم</dt><dd>'+(f.branches>1?f.branches+' فروع':'')+(f.branches>1&&f.fleet>0?' · ':'')+(f.fleet>0?'أسطول '+f.fleet+' سيارة':'')+'</dd>':'')
@@ -2268,6 +2291,7 @@ function openCustomer(id){
     foot:'<button class="btn primary" id="cs-plan"></button><button class="btn" data-act="edit-cust" data-id="'+esc(id)+'">تعديل البيانات</button>'
       +'<button class="btn" data-act="add-person" data-fid="'+esc(c.facilityId||"")+'">إضافة شخص من المنشأة</button>'
       +(c.facilityId?'<button class="btn" data-act="edit-fac" data-fid="'+esc(c.facilityId)+'">تعديل المنشأة</button>':'')
+      +'<button class="btn" data-act="snooze" data-id="'+esc(id)+'">'+((restOf(c)&&!restOf(c).auto)?"إلغاء إيقاف المتابعة":"أوقف المتابعة مؤقتاً")+'</button>'
       +(S.isOwner?'<button class="btn" data-act="toggle-imp" data-id="'+esc(id)+'">'+(c.important?"إلغاء تمييز العميل":"تمييز كعميل مهم ★")+'</button>':''),
     mount(root){
       const b=$("#cs-plan",root);
@@ -2876,6 +2900,7 @@ function waSituation(c){
   /* a brand-new account just registered (met in the field): the welcome message goes out right away, before any visit is logged */
   if(isNew&&!lv0&&!lm&&c.since&&diff(c.since,day)<=7) return {kind:"welcomeNew",u:97}; /* stays on the list for a week until it is sent */
   const qt=quoteTouch(c,day); if(qt&&qt.st[1]==="msg") return {kind:qt.st[2],item:qt.q.item,qid:qt.q.id,u:90+Math.min(qt.late,5)}; /* quote ladder runs on its own clock, not the general 7-day message throttle */
+  if(restOf(c,day)) return null; /* resting: no reminders until the rest ends (quote follow-ups above keep running) */
   if(lm&&diff(lm,day)<(isNew?3:7)) return null; /* new accounts can take a follow-up every 3 days, others every 7 */
   const fm=fmOf(c), d=S.der.get(c.id)||{};
   if(d.lastOrder){ const n=diff(d.lastOrder,day); if(n>=1&&n<=2) return {kind:"delivered",u:80}; }
@@ -3045,6 +3070,15 @@ document.addEventListener("click",async e=>{
   if(a==="plan-accept"){ const dy=b.dataset.day; b.disabled=true; const n=await addPlanned(dy,suggestPlan(dy,"").picks); if(n) toast("اعتُمدت "+n+" زيارات في خطة اليوم"); else b.disabled=false; return; }
   if(a==="carry-move"){ b.disabled=true; const n=await addPlanned(S.day,carryItems(S.day)); if(n) toast("رُحّلت "+n+" زيارات إلى اليوم"); return; }
   if(a==="carry-drop"){ b.disabled=true; const ids=carryItems(S.day).map(x=>x.carryVisit.id); const up=await guard(sb.from("visits").update({state:"missed"}).in("id",ids).select(),"تم تجاهلها وسُجّلت كزيارات لم تتم"); if(up&&up.forEach){ up.forEach(putVisit); refresh(); } return; }
+  if(a==="snooze"){
+    const c=S.customers.get(id); if(!c) return; const fm=fmOf(c), ids=(fm?fm.people:[c]).map(p=>p.id), rs=restOf(c);
+    const apply=async d=>{ const until=d?addDays(todayStr(),d):null; const r=await guard(sb.from("customers").update({snooze_until:until}).in("id",ids).select(),d?"أُوقفت المتابعة حتى "+dShort(until):"أُعيدت المتابعة"); if(r&&r.forEach){ r.forEach(putCust); refresh(); } openCustomer(id); };
+    if(rs&&!rs.auto){ await apply(0); return; }
+    openSheet({title:"أوقف المتابعة مؤقتاً", sub:esc(cname(c)), body:'<div class="v-sub">لن يظهر هذا العميل في الخطة ولا في الأولويات ولا في التذكيرات طوال المدة، ثم يعود تلقائياً. تسعيرته ومتابعة السداد تبقى كما هي، ويمكنك إضافته للخطة يدوياً متى شئت.</div><div class="row grow" style="margin-top:12px">'+[14,30,60,90].map(d=>'<button class="btn" data-d="'+d+'">'+d+' يوماً</button>').join("")+'</div>',
+      foot:'<button class="btn" id="sz-cancel">رجوع</button>',
+      mount(root){ root.querySelectorAll("[data-d]").forEach(b=>b.addEventListener("click",()=>apply(Number(b.dataset.d)))); $("#sz-cancel",root).addEventListener("click",()=>openCustomer(id)); } });
+    return;
+  }
   if(a==="toggle-imp"){ const c=S.customers.get(id); if(!c) return; const r=await guard(sb.from("customers").update({important:!c.important}).eq("id",id).select().single(),c.important?"أُلغي التمييز":"مُيّز كعميل مهم"); if(r){ putCust(r); refresh(); openCustomer(id); } return; }
   if(a==="guide") return openGuide(id);
   if(a==="wa") return openWa(id,b.dataset.kind||null,b.dataset.qid||null,b.dataset.oid||null);
